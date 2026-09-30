@@ -110,34 +110,24 @@ function statusBadge(status) {
 
 export default function AdminResultsPage() {
   const { showToast } = useToast();
-  const fileRef = useRef(null);
   const uploadFileRef = useRef(null);
 
   const [results, setResults] = useState(INITIAL);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("all");
-  const [dragging, setDragging] = useState(false);
 
-  // Upload modal (for a specific pending item)
   const [uploadTarget, setUploadTarget] = useState(null);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadNotes, setUploadNotes] = useState("");
 
-  // Drop-assign modal (from top drag zone)
-  const [dropFile, setDropFile] = useState(null);
-  const [dropTargetId, setDropTargetId] = useState("");
-
-  // Security code
   const [codeOpen, setCodeOpen] = useState(false);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [codeTargetId, setCodeTargetId] = useState(null);
 
-  // Viewer
   const [viewId, setViewId] = useState(null);
 
-  // Edit / re-upload
   const [editId, setEditId] = useState(null);
   const [editNotes, setEditNotes] = useState("");
   const [editFile, setEditFile] = useState(null);
@@ -189,15 +179,11 @@ export default function AdminResultsPage() {
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
-        (r) =>
-          r.client?.toLowerCase().includes(q) ||
-          r.test?.toLowerCase().includes(q)
+        (r) => r.client?.toLowerCase().includes(q) || r.test?.toLowerCase().includes(q)
       );
     }
     return list;
   }, [results, tab, search]);
-
-  const pendingList = results.filter((r) => r.status === "pending_upload");
 
   function validatePdf(file) {
     if (!file) return false;
@@ -248,42 +234,6 @@ export default function AdminResultsPage() {
     setUploadNotes("");
   }
 
-  function handleTopDrop(files) {
-    const file = files?.[0];
-    if (!validatePdf(file)) return;
-    setDropFile(file);
-    setDropTargetId(pendingList[0]?.id ? String(pendingList[0].id) : "");
-  }
-
-  function confirmDropAssign(e) {
-    e.preventDefault();
-    if (!dropFile || !dropTargetId) {
-      showToast("Select a client/test to attach this PDF", "error");
-      return;
-    }
-    const id = Number(dropTargetId);
-    setResults((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: "pending_approval",
-              file: dropFile.name,
-              notes: "",
-              uploadedBy: currentUserEmail,
-              uploadDate: todayLabel(),
-              lastUpdated: nowStamp(),
-              awaiting: SUPER_ADMIN,
-              rejectReason: null,
-            }
-          : r
-      )
-    );
-    showToast("Result uploaded - sent to super admin for approval");
-    setDropFile(null);
-    setDropTargetId("");
-  }
-
   function requestView(id) {
     setCodeTargetId(id);
     setCode("");
@@ -304,17 +254,13 @@ export default function AdminResultsPage() {
   }
 
   function approveResult(id) {
-    if (!isSuperAdmin) {
-      showToast("Only super admin can approve", "error");
-      return;
-    }
     setResults((prev) =>
       prev.map((r) =>
         r.id === id
           ? {
               ...r,
               status: "completed",
-              approvedBy: SUPER_ADMIN,
+              approvedBy: currentUserEmail,
               approvedAt: nowStamp(),
               lastUpdated: nowStamp(),
             }
@@ -325,8 +271,7 @@ export default function AdminResultsPage() {
   }
 
   function rejectResult(id) {
-    if (!isSuperAdmin) return;
-    const reason = prompt("Rejection reason (optional):") || "Rejected by super admin";
+    const reason = prompt("Rejection reason (optional):") || "Rejected";
     setResults((prev) =>
       prev.map((r) =>
         r.id === id
@@ -424,7 +369,7 @@ export default function AdminResultsPage() {
             <span className="text-sm font-medium">Pending Approval</span>
           </div>
           <p className="text-4xl font-bold text-[#0F172A]">{stats.pendingApproval}</p>
-          <p className="mt-1 text-xs text-slate-500">Super admin review</p>
+          <p className="mt-1 text-xs text-slate-500">Awaiting approval</p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-2 flex items-center gap-2 text-violet-600">
@@ -434,44 +379,6 @@ export default function AdminResultsPage() {
             <span className="text-sm font-medium">Uploaded Today</span>
           </div>
           <p className="text-4xl font-bold text-[#0F172A]">{stats.uploadedToday}</p>
-        </div>
-      </div>
-
-      {/* Drag & drop */}
-      <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 font-bold text-[#0F172A]">Upload Lab Results</h2>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".pdf,application/pdf"
-          className="hidden"
-          onChange={(e) => handleTopDrop(e.target.files)}
-        />
-        <div
-          className={`cursor-pointer rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${
-            dragging ? "border-[#2563EB] bg-blue-100" : "border-blue-200 bg-blue-50/50"
-          }`}
-          onClick={() => fileRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            handleTopDrop(e.dataTransfer.files);
-          }}
-        >
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-            <FileUp className="h-6 w-6 text-[#2563EB]" />
-          </div>
-          <p className="font-semibold text-[#0F172A]">Drag & drop your lab results PDF here</p>
-          <p className="mt-1 text-sm text-[#2563EB] underline">or click to browse</p>
-          <p className="mt-2 text-xs text-slate-500">Supported: PDF only · Max file size 20MB · Encrypted & HIPAA compliant</p>
-          <button type="button" className="mt-4 rounded-xl bg-[#2563EB] px-5 py-2 text-sm font-semibold text-white">
-            Browse Files
-          </button>
         </div>
       </div>
 
@@ -553,11 +460,11 @@ export default function AdminResultsPage() {
                             <Eye className="h-3.5 w-3.5" /> View Results
                           </button>
                         )}
-                        {r.status === "pending_approval" && isSuperAdmin && (
+                        {r.status === "pending_approval" && (
                           <button
                             type="button"
                             onClick={() => approveResult(r.id)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                           </button>
@@ -575,56 +482,7 @@ export default function AdminResultsPage() {
         </div>
       </div>
 
-      {/* Top drop → assign to pending */}
-      {dropFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={confirmDropAssign} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#0F172A]">Assign PDF to client</h3>
-              <button type="button" onClick={() => setDropFile(null)} className="rounded-lg p-1 hover:bg-slate-100">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mb-3 text-sm text-slate-500">
-              File: <strong>{dropFile.name}</strong>
-            </p>
-            {pendingList.length === 0 ? (
-              <p className="text-sm text-amber-600">No pending uploads to attach this file to.</p>
-            ) : (
-              <div>
-                <label className="mb-1 block text-xs font-medium">Select client / test *</label>
-                <select
-                  required
-                  value={dropTargetId}
-                  onChange={(e) => setDropTargetId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                >
-                  <option value="">Choose…</option>
-                  {pendingList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.client} — {p.test}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setDropFile(null)} className="flex-1 rounded-xl border py-2.5 text-sm">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!pendingList.length}
-                className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                Upload & Send for Approval
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Upload modal for row */}
+      {/* Upload modal (per-row) */}
       {uploadTarget && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <form
@@ -634,7 +492,7 @@ export default function AdminResultsPage() {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-[#0F172A]">Upload Results</h3>
-                <p className="text-xs text-slate-500">PDF will be sent for super admin approval</p>
+                <p className="text-xs text-slate-500">PDF will be sent for approval</p>
               </div>
               <button type="button" onClick={() => setUploadTarget(null)} className="rounded-lg p-1 hover:bg-slate-100">
                 <X className="h-5 w-5" />
@@ -677,7 +535,7 @@ export default function AdminResultsPage() {
                 onChange={(e) => setUploadNotes(e.target.value)}
                 rows={2}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#2563EB] resize-none"
-                placeholder="Optional notes for reviewer…"
+                placeholder="Optional notes…"
               />
             </div>
             <div className="flex gap-2">
@@ -692,7 +550,7 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* Security code modal */}
+      {/* Security code */}
       {codeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={unlockView} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
@@ -729,7 +587,7 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* Results viewer */}
+      {/* Viewer */}
       {viewRow && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <div className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-xl max-h-[92vh] overflow-y-auto">
@@ -767,9 +625,7 @@ export default function AdminResultsPage() {
               {viewRow.lastUpdated && (
                 <p className="text-xs text-slate-500">Last updated: {viewRow.lastUpdated}</p>
               )}
-              {viewRow.notes && (
-                <p className="text-slate-600">Notes: {viewRow.notes}</p>
-              )}
+              {viewRow.notes && <p className="text-slate-600">Notes: {viewRow.notes}</p>}
             </div>
 
             <div className="mb-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
@@ -790,7 +646,7 @@ export default function AdminResultsPage() {
               >
                 <Edit2 className="h-3.5 w-3.5" /> Edit / Update Result
               </button>
-              {viewRow.status === "pending_approval" && isSuperAdmin && (
+              {viewRow.status === "pending_approval" && (
                 <>
                   <button
                     type="button"
@@ -830,7 +686,7 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* Edit / update modal */}
+      {/* Edit modal */}
       {editId != null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={submitEdit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -852,7 +708,6 @@ export default function AdminResultsPage() {
                 className="w-full text-sm"
               />
               {editFile && <p className="mt-1 text-xs text-slate-500">{editFile.name}</p>}
-              <p className="mt-1 text-[10px] text-slate-400">New PDF will reset status to Pending Approval</p>
             </div>
             <div className="mb-4">
               <label className="mb-1 block text-xs font-medium">Notes</label>
