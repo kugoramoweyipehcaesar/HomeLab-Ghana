@@ -20,7 +20,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Exact medical background pattern from template */
 .auth-bg {
   background-color: #f0f7ff;
   background-image: 
@@ -37,7 +36,6 @@ body {
   pointer-events: none;
 }
 
-/* Card styles matching templates */
 .card {
   @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
 }
@@ -48,4 +46,29 @@ body {
 
 .btn-outline {
   @apply border-2 border-[#0D6EFD] text-[#0D6EFD] hover:bg-blue-50 font-semibold rounded-xl transition;
+}
+
+img, video, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.table-scroll {
+  @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+}
+
+input, select, textarea, button {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input, select, textarea, button {
+    font-size: inherit;
+  }
+}
+
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
 }
