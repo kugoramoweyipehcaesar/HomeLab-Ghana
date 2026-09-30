@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Search, Plus, Calendar, Clock, CheckCircle2, FlaskConical, Download,
   Edit2, Eye, MoreHorizontal, X, Phone, MapPin, Mail, Trash2, Check,
@@ -49,6 +49,9 @@ function fmtDate(d) {
     return x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   } catch { return d; }
 }
+function sameJson(a, b) {
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+}
 
 export default function AdminBookingsPage() {
   const { showToast } = useToast();
@@ -62,27 +65,42 @@ export default function AdminBookingsPage() {
   const [detailId, setDetailId] = useState(null);
   const [menuId, setMenuId] = useState(null);
   const [catalog, setCatalog] = useState([]);
+  const skipSave = useRef(true);
 
   useEffect(() => {
     const list = getAllBookings();
     if (list.length) setBookings(list);
-    else { setBookings(INITIAL); saveBookings(INITIAL); }
+    else {
+      setBookings(INITIAL);
+      try {
+        if (!localStorage.getItem("bookings") && !localStorage.getItem("homelab_bookings")) {
+          saveBookings(INITIAL);
+        }
+      } catch { /* ignore */ }
+    }
     setCatalog(getActiveCatalog());
     setLoaded(true);
+    skipSave.current = true;
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1") openNew();
-    const refresh = () => { const n = getAllBookings(); if (n.length) setBookings(n); setCatalog(getActiveCatalog()); };
+
+    const refresh = () => {
+      const n = getAllBookings();
+      setBookings((prev) => (n.length && !sameJson(prev, n) ? n : prev));
+      setCatalog(getActiveCatalog());
+    };
     window.addEventListener("bookingsUpdated", refresh);
-    window.addEventListener("homelab:bookings", refresh);
-    window.addEventListener("catalogUpdated", refresh);
+    window.addEventListener("catalogUpdated", () => setCatalog(getActiveCatalog()));
     return () => {
       window.removeEventListener("bookingsUpdated", refresh);
-      window.removeEventListener("homelab:bookings", refresh);
-      window.removeEventListener("catalogUpdated", refresh);
     };
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
+    if (skipSave.current) {
+      skipSave.current = false;
+      return;
+    }
     saveBookings(bookings);
   }, [bookings, loaded]);
 
@@ -151,7 +169,7 @@ export default function AdminBookingsPage() {
         address: form.address.trim(), region: form.region, tests: form.tests, date: form.date,
         time: form.time, status: form.status, notes: form.notes.trim(), paymentStatus: form.paymentStatus,
       } : b));
-      showToast("Booking updated — synced site-wide");
+      showToast("Booking updated");
     } else {
       const booking = {
         id: Date.now(), clientName: form.clientName.trim(), phone: form.phone.trim(), email: form.email.trim(),
@@ -161,7 +179,7 @@ export default function AdminBookingsPage() {
         total: form.tests.reduce((s, n) => s + testPrice(n, catalog), 0) + 20,
       };
       setBookings((prev) => [booking, ...prev]);
-      showToast(`Booking added for ${booking.clientName} — clients & payments updated`);
+      showToast(`Booking added for ${booking.clientName}`);
     }
     setShowForm(false); setEditingId(null); setForm(EMPTY);
   }
@@ -176,14 +194,13 @@ export default function AdminBookingsPage() {
   }
 
   const detail = bookings.find((b) => b.id === detailId);
-  const statusIndex = (status) => { const i = STATUS_FLOW.findIndex((s) => s.key === status); return i >= 0 ? i : 0; };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0F172A]">Bookings Management</h1>
-          <p className="text-sm text-slate-500">Changes sync to clients, payments & results instantly</p>
+          <p className="text-sm text-slate-500">Manage appointments</p>
         </div>
         <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-600">
           <Plus className="h-4 w-4" /> New Booking
@@ -213,9 +230,6 @@ export default function AdminBookingsPage() {
             <option value="All">Status: All Statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button type="button" onClick={() => showToast("CSV export started")} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">
-            <Download className="h-4 w-4" /> Export CSV
-          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -244,7 +258,7 @@ export default function AdminBookingsPage() {
                   <td className="py-3.5 pr-3">
                     <div className="flex flex-wrap gap-1">
                       {(Array.isArray(b.tests) ? b.tests : [b.tests]).map((t) => (
-                        <span key={t} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-[#2563EB]">{t}</span>
+                        <span key={String(t)} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-[#2563EB]">{t}</span>
                       ))}
                     </div>
                   </td>
@@ -255,20 +269,17 @@ export default function AdminBookingsPage() {
                   </td>
                   <td className="py-3.5">
                     <div className="relative flex items-center gap-1 text-slate-400">
-                      <button type="button" className="rounded p-1.5 hover:bg-slate-100 hover:text-[#2563EB]" onClick={() => openEdit(b)}><Edit2 className="h-4 w-4" /></button>
-                      <button type="button" className="rounded p-1.5 hover:bg-slate-100 hover:text-[#2563EB]" onClick={() => setDetailId(b.id)}><Eye className="h-4 w-4" /></button>
+                      <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={() => openEdit(b)}><Edit2 className="h-4 w-4" /></button>
+                      <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={() => setDetailId(b.id)}><Eye className="h-4 w-4" /></button>
                       <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); setMenuId(menuId === b.id ? null : b.id); }}><MoreHorizontal className="h-4 w-4" /></button>
                       {menuId === b.id && (
-                        <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
-                          <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => { setDetailId(b.id); setMenuId(null); }}><Eye className="h-3.5 w-3.5" /> View Details</button>
-                          <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => openEdit(b)}><Edit2 className="h-3.5 w-3.5" /> Edit</button>
-                          <div className="border-t border-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase text-slate-400">Change Status</div>
+                        <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border bg-white py-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                           {STATUSES.map((s) => (
                             <button key={s} type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-slate-50" onClick={() => changeStatus(b.id, s)}>
                               {b.status === s ? <Check className="h-3 w-3 text-[#2563EB]" /> : <span className="w-3" />}{s}
                             </button>
                           ))}
-                          <button type="button" className="flex w-full items-center gap-2 border-t border-slate-50 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+                          <button type="button" className="flex w-full items-center gap-2 border-t px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                         </div>
                       )}
                     </div>
@@ -285,37 +296,39 @@ export default function AdminBookingsPage() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <form onSubmit={submitForm} className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-xl max-h-[92vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
-              <div><h2 className="text-lg font-bold text-[#0F172A]">{editingId ? "Edit Booking" : "New Booking"}</h2><p className="text-xs text-slate-500">Syncs to clients & payments</p></div>
-              <button type="button" onClick={() => setShowForm(false)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <h2 className="text-lg font-bold">{editingId ? "Edit Booking" : "New Booking"}</h2>
+              <button type="button" onClick={() => setShowForm(false)}><X className="h-5 w-5" /></button>
             </div>
             <div className="space-y-3">
-              <div><label className="mb-1 block text-xs font-medium text-slate-700">Client Name *</label><input required value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]" placeholder="e.g. Ama Boateng" /></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-xs font-medium text-slate-700">Phone *</label><input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="+233 ..." /></div>
-                <div><label className="mb-1 block text-xs font-medium text-slate-700">Email</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></div>
+              <div><label className="mb-1 block text-xs font-medium">Client Name *</label><input required value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-xs font-medium">Phone *</label><input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
+                <div><label className="mb-1 block text-xs font-medium">Email</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
               </div>
-              <div><label className="mb-1 block text-xs font-medium text-slate-700">Address *</label><input required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="mb-1 block text-xs font-medium">Region</label><select value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">{REGIONS.map((r) => <option key={r}>{r}</option>)}</select></div>
-                <div><label className="mb-1 block text-xs font-medium">Date *</label><input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></div>
-                <div><label className="mb-1 block text-xs font-medium">Time</label><select value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">{["08:00 AM","09:00 AM","09:30 AM","10:00 AM","11:00 AM","02:00 PM","03:00 PM","04:00 PM"].map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div><label className="mb-1 block text-xs font-medium">Address *</label><input required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-xs font-medium">Region</label><select value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm">{REGIONS.map((r) => <option key={r}>{r}</option>)}</select></div>
+                <div><label className="mb-1 block text-xs font-medium">Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm">{STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
               </div>
-              <div><label className="mb-1.5 block text-xs font-medium">Tests *</label>
-                <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-slate-200 p-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-xs font-medium">Date *</label><input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
+                <div><label className="mb-1 block text-xs font-medium">Time</label><input value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" /></div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Tests *</label>
+                <div className="flex flex-wrap gap-2">
                   {testOptions.map((t) => (
-                    <label key={t.name} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 ${form.tests.includes(t.name) ? "bg-blue-50" : ""}`}>
-                      <input type="checkbox" checked={form.tests.includes(t.name)} onChange={() => toggleTest(t.name)} className="accent-[#2563EB]" />
-                      <span className="flex-1 font-medium">{t.name}</span><span className="text-xs text-slate-500">GH₵ {t.price}</span>
+                    <label key={t.name} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${form.tests.includes(t.name) ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-slate-200"}`}>
+                      <input type="checkbox" className="sr-only" checked={form.tests.includes(t.name)} onChange={() => toggleTest(t.name)} />{t.name}
                     </label>
                   ))}
                 </div>
               </div>
-              <div><label className="mb-1 block text-xs font-medium">Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">{STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
-              <div><label className="mb-1 block text-xs font-medium">Notes</label><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none" /></div>
+              <div><label className="mb-1 block text-xs font-medium">Notes</label><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full rounded-xl border px-3 py-2 text-sm" /></div>
             </div>
             <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium">Cancel</button>
-              <button type="submit" className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">{editingId ? "Save Changes" : "Create Booking"}</button>
+              <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-xl border py-2.5 text-sm">Cancel</button>
+              <button type="submit" className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">Save</button>
             </div>
           </form>
         </div>
@@ -323,55 +336,17 @@ export default function AdminBookingsPage() {
 
       {detail && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={() => setDetailId(null)}>
-          <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between border-b border-slate-100 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2563EB] text-sm font-bold text-white">{initials(detail.clientName)}</div>
-                <div>
-                  <h2 className="text-lg font-bold text-[#0F172A]">{detail.clientName}</h2>
-                  <span className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClass(detail.status)}`}>{detail.status}</span>
-                </div>
-              </div>
-              <button type="button" onClick={() => setDetailId(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          <div className="h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex justify-between"><h2 className="text-lg font-bold">{detail.clientName}</h2><button type="button" onClick={() => setDetailId(null)}><X className="h-5 w-5" /></button></div>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p className="flex items-center gap-2"><Phone className="h-4 w-4" />{detail.phone}</p>
+              <p className="flex items-center gap-2"><Mail className="h-4 w-4" />{detail.email || "—"}</p>
+              <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{detail.address}</p>
+              <p>Status: {detail.status}</p>
+              <p>Date: {fmtDate(detail.date)} · {detail.time}</p>
+              <p>Tests: {(Array.isArray(detail.tests) ? detail.tests : []).join(", ")}</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              <section>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Contact</h3>
-                <div className="space-y-2.5 text-sm text-slate-600">
-                  <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-slate-400" /> {detail.phone || "—"}</div>
-                  <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-slate-400" /> {detail.address || "—"}</div>
-                  <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-slate-400" /> {detail.email || "—"}</div>
-                </div>
-              </section>
-              <section>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Timeline</h3>
-                {STATUS_FLOW.map((step, idx) => {
-                  const cur = statusIndex(detail.status); const done = idx < cur; const active = idx === cur;
-                  return (
-                    <div key={step.key} className="relative flex gap-3 pb-5 last:pb-0">
-                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${done ? "bg-emerald-500 text-white" : active ? "bg-orange-500 text-white" : "bg-slate-200 text-slate-400"}`}>
-                        {done ? <Check className="h-3.5 w-3.5" /> : <span className="text-[10px] font-bold">{idx + 1}</span>}
-                      </div>
-                      <div><p className={`text-sm font-semibold ${active ? "text-orange-600" : done ? "text-emerald-700" : "text-slate-400"}`}>{step.label}</p><p className="text-xs text-slate-500">{step.desc}</p></div>
-                    </div>
-                  );
-                })}
-              </section>
-              <section>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Tests</h3>
-                <ul className="space-y-2">
-                  {(Array.isArray(detail.tests) ? detail.tests : []).map((t) => (
-                    <li key={t} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-sm">
-                      <span className="font-medium">{t}</span><span className="text-[#2563EB] font-semibold">GH₵ {testPrice(t, catalog)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-            <div className="flex gap-2 border-t border-slate-100 p-4">
-              <button type="button" onClick={() => openEdit(detail)} className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">Edit Booking</button>
-              <button type="button" onClick={() => deleteBooking(detail.id)} className="flex-1 rounded-xl border border-red-200 py-2.5 text-sm font-semibold text-red-600">Cancel Booking</button>
-            </div>
+            <button type="button" onClick={() => openEdit(detail)} className="mt-6 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">Edit</button>
           </div>
         </div>
       )}
