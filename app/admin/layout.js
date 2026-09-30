@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import AdminSidebar from "@/components/AdminSidebar";
-import { checkAdmin } from "@/lib/auth";
+import { checkAdmin, setAdminSession, ADMIN_EMAIL } from "@/lib/auth";
 
 export default function AdminLayout({ children }) {
-  const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [email, setEmail] = useState("");
@@ -15,6 +13,25 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("isAdmin") === "true") {
+      // Ensure super admin session fields if already logged in
+      if (!localStorage.getItem("admin_email")) {
+        localStorage.setItem("admin_email", ADMIN_EMAIL);
+      }
+      try {
+        const u = JSON.parse(localStorage.getItem("currentUser") || "{}");
+        if (!u.fullName || u.fullName === "Dr. Kojo Mensah" || u.fullName === "Dr. Ama Mensah") {
+          localStorage.setItem(
+            "currentUser",
+            JSON.stringify({
+              email: u.email || ADMIN_EMAIL,
+              fullName: "Super Admin",
+              role: "Super Admin",
+            })
+          );
+        }
+      } catch {
+        /* ignore */
+      }
       setAuthed(true);
     }
     setReady(true);
@@ -23,10 +40,14 @@ export default function AdminLayout({ children }) {
   function handleLogin(e) {
     e.preventDefault();
     if (checkAdmin(email, password)) {
-      localStorage.setItem("isAdmin", "true");
+      setAdminSession(email || ADMIN_EMAIL);
       localStorage.setItem(
         "currentUser",
-        JSON.stringify({ email, fullName: "Dr. Kojo Mensah", role: "admin" })
+        JSON.stringify({
+          email: email || ADMIN_EMAIL,
+          fullName: "Super Admin",
+          role: "Super Admin",
+        })
       );
       setAuthed(true);
       setError("");
