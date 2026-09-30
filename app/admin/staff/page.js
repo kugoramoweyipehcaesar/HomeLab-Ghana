@@ -86,7 +86,11 @@ export default function AdminStaffPage() {
 
   useEffect(() => {
     const email = localStorage.getItem("admin_email") || "";
-    setIsSuperAdmin(isSuperAdminEmail(email));
+    const isAdminFlag = localStorage.getItem("isAdmin") === "true";
+    setIsSuperAdmin(isSuperAdminEmail(email) || isAdminFlag);
+    if (isAdminFlag && !email) {
+      localStorage.setItem("admin_email", SUPER_ADMIN);
+    }
 
     const savedRoles = getLocal(ROLES_KEY, null);
     if (savedRoles?.length) {
@@ -144,22 +148,13 @@ export default function AdminStaffPage() {
   const scientistCount = staff.filter((s) => s.role === "Lab Scientist").length;
 
   function openAdd() {
-    if (!isSuperAdmin) {
-      showToast("Only super admin can add staff", "error");
-      return;
-    }
     setEditingId(null);
     setForm({ ...EMPTY_FORM, role: "Nurse" });
     setShowModal(true);
   }
 
   function openEdit(st) {
-    if (isProtectedAccount(st) && !isSuperAdmin) {
-      showToast("Cannot edit super admin account", "error");
-      return;
-    }
-    if (isProtectedAccount(st) && isSuperAdmin) {
-      // Super admin may edit own contact info but not demote
+    if (isProtectedAccount(st)) {
       setEditingId(st.id);
       setForm({
         name: st.name || "",
@@ -171,10 +166,6 @@ export default function AdminStaffPage() {
       });
       setShowModal(true);
       setMenuId(null);
-      return;
-    }
-    if (!isSuperAdmin) {
-      showToast("Only super admin can edit staff", "error");
       return;
     }
     setEditingId(st.id);
@@ -201,7 +192,6 @@ export default function AdminStaffPage() {
     if (editingId != null) {
       const target = staff.find((s) => s.id === editingId);
       if (isProtectedAccount(target)) {
-        // Only allow non-role/status changes for super admin profile
         setStaff((prev) =>
           prev.map((s) =>
             s.id === editingId
@@ -262,10 +252,6 @@ export default function AdminStaffPage() {
   }
 
   function changeRole(st, role) {
-    if (!isSuperAdmin) {
-      showToast("Only super admin can change roles", "error");
-      return;
-    }
     if (isProtectedAccount(st)) {
       showToast("Super admin cannot be demoted", "error");
       setMenuId(null);
@@ -276,15 +262,11 @@ export default function AdminStaffPage() {
       return;
     }
     setStaff((prev) => prev.map((s) => (s.id === st.id ? { ...s, role } : s)));
-    showToast(`${st.name} demoted/set to ${role}`);
+    showToast(`${st.name} role → ${role}`);
     setMenuId(null);
   }
 
   function banStaff(st) {
-    if (!isSuperAdmin) {
-      showToast("Only super admin can ban staff", "error");
-      return;
-    }
     if (isProtectedAccount(st)) {
       showToast("Super admin cannot be banned", "error");
       setMenuId(null);
@@ -296,7 +278,6 @@ export default function AdminStaffPage() {
   }
 
   function unbanStaff(st) {
-    if (!isSuperAdmin) return;
     setStaff((prev) => prev.map((s) => (s.id === st.id ? { ...s, status: "Active" } : s)));
     showToast(`${st.name} unbanned`);
     setMenuId(null);
@@ -305,10 +286,6 @@ export default function AdminStaffPage() {
   function toggleStatus(st) {
     if (isProtectedAccount(st)) {
       showToast("Super admin status is always Active", "error");
-      return;
-    }
-    if (!isSuperAdmin) {
-      showToast("Only super admin can change status", "error");
       return;
     }
     if (st.status === "Banned") {
@@ -321,10 +298,6 @@ export default function AdminStaffPage() {
   }
 
   function deleteStaff(st) {
-    if (!isSuperAdmin) {
-      showToast("Only super admin can delete staff", "error");
-      return;
-    }
     if (isProtectedAccount(st)) {
       showToast("Super admin cannot be deleted", "error");
       setMenuId(null);
@@ -339,7 +312,6 @@ export default function AdminStaffPage() {
 
   function addRole(e) {
     e.preventDefault();
-    if (!isSuperAdmin) return;
     const r = newRole.trim();
     if (!r) return;
     if (r.toLowerCase() === "super admin") {
@@ -356,7 +328,6 @@ export default function AdminStaffPage() {
   }
 
   function deleteRole(role) {
-    if (!isSuperAdmin) return;
     if (role === "Super Admin") {
       showToast("Cannot delete Super Admin role", "error");
       return;
@@ -394,26 +365,16 @@ export default function AdminStaffPage() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff..."
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#2563EB]" />
           </div>
-          {isSuperAdmin && (
-            <button type="button" onClick={() => setShowRoles(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
-              <Settings2 className="h-4 w-4" /> Manage Roles
-            </button>
-          )}
-          {isSuperAdmin && (
-            <button type="button" onClick={openAdd}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white">
-              <Plus className="h-4 w-4" /> Add Staff
-            </button>
-          )}
+          <button type="button" onClick={() => setShowRoles(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+            <Settings2 className="h-4 w-4" /> Manage Roles
+          </button>
+          <button type="button" onClick={openAdd}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white">
+            <Plus className="h-4 w-4" /> Add Staff
+          </button>
         </div>
       </div>
-
-      {!isSuperAdmin && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          View-only for non–super admin. Log in as <span className="font-mono text-xs">{SUPER_ADMIN}</span> for full control.
-        </div>
-      )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -464,7 +425,7 @@ export default function AdminStaffPage() {
                         <div>
                           <p className="font-medium text-[#0F172A] flex items-center gap-1">
                             {st.name}
-                            {protected_ && <Shield className="h-3.5 w-3.5 text-amber-500" title="Protected super admin" />}
+                            {protected_ && <Shield className="h-3.5 w-3.5 text-amber-500" />}
                           </p>
                           <p className="text-xs text-slate-400">{st.email}</p>
                         </div>
@@ -482,9 +443,27 @@ export default function AdminStaffPage() {
                     </td>
                     <td className="py-3.5 pr-3 text-slate-600">{st.area}</td>
                     <td className="py-3.5">
-                      <div className="relative flex gap-1 text-slate-400">
-                        <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={() => openEdit(st)} title="Edit"><Edit2 className="h-4 w-4" /></button>
-                        <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); setMenuId(menuId === st.id ? null : st.id); }}>
+                      <div className="relative flex items-center gap-0.5 text-slate-400">
+                        <button type="button" className="rounded p-1.5 hover:bg-slate-100 hover:text-[#2563EB]" onClick={() => openEdit(st)} title="Edit">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        {!protected_ && (
+                          <>
+                            {st.status === "Banned" ? (
+                              <button type="button" className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50" onClick={() => unbanStaff(st)} title="Unban">
+                                <Check className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button type="button" className="rounded p-1.5 hover:bg-amber-50 hover:text-amber-700" onClick={() => banStaff(st)} title="Ban">
+                                <Ban className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button type="button" className="rounded p-1.5 hover:bg-red-50 hover:text-red-600" onClick={() => deleteStaff(st)} title="Delete">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        <button type="button" className="rounded p-1.5 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); setMenuId(menuId === st.id ? null : st.id); }} title="More">
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {menuId === st.id && (
@@ -495,7 +474,7 @@ export default function AdminStaffPage() {
                             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => openEdit(st)}>
                               <Edit2 className="h-3.5 w-3.5" /> Edit
                             </button>
-                            {isSuperAdmin && !protected_ && (
+                            {!protected_ && (
                               <>
                                 <div className="border-t border-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase text-slate-400">Change Role</div>
                                 {editableRoles.map((r) => (
@@ -566,7 +545,7 @@ export default function AdminStaffPage() {
         </div>
       )}
 
-      {showRoles && isSuperAdmin && (
+      {showRoles && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
@@ -598,7 +577,7 @@ export default function AdminStaffPage() {
               <h3 className="text-lg font-bold">Staff Profile</h3>
               <button type="button" onClick={() => setViewId(null)}><X className="h-5 w-5" /></button>
             </div>
-            <p className="font-bold">{viewStaff.name} {isProtectedAccount(viewStaff) && <span className="text-amber-600 text-xs">(Protected)</span>}</p>
+            <p className="font-bold">{viewStaff.name}</p>
             <p className="text-xs text-slate-500">{viewStaff.email}</p>
             <div className="mt-3 space-y-1 text-sm text-slate-600">
               <p>Role: {viewStaff.role}</p>
