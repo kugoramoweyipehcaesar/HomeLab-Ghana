@@ -41,6 +41,23 @@ const DEFAULT_METHODS = [
   },
 ];
 
+function normalizeMethods(raw) {
+  const byId = new Map(DEFAULT_METHODS.map((m) => [m.id, m]));
+  if (!Array.isArray(raw) || !raw.length) return DEFAULT_METHODS;
+  const enabled = raw.filter((m) => m && m.enabled !== false);
+  if (!enabled.length) return DEFAULT_METHODS;
+  return enabled.map((m) => {
+    const fallback = byId.get(m.id) || {};
+    return {
+      id: m.id || fallback.id || String(Math.random()),
+      title: m.title || fallback.title || "Payment",
+      number: m.number || fallback.number || "—",
+      name: m.name || fallback.name || "HomeLab GH",
+      enabled: true,
+    };
+  });
+}
+
 export default function BookTestPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -70,15 +87,13 @@ export default function BookTestPage() {
   };
 
   const loadPayMethods = () => {
-    const methods = getPaymentMethods();
-    const list =
-      methods?.length > 0
-        ? methods.filter((m) => m.enabled !== false)
-        : DEFAULT_METHODS;
-    setPayMethods(list.length ? list : DEFAULT_METHODS);
-    if (list.length && !list.find((m) => m.id === selectedMethodId)) {
-      setSelectedMethodId(list[0].id);
-    }
+    const fromStore = getPaymentMethods();
+    const fromLs = getLocal("homelab_payment_methods", null);
+    const list = normalizeMethods(fromStore || fromLs);
+    setPayMethods(list);
+    setSelectedMethodId((prev) =>
+      list.find((m) => m.id === prev) ? prev : list[0]?.id || "mtn"
+    );
   };
 
   useEffect(() => {
@@ -87,10 +102,12 @@ export default function BookTestPage() {
     window.addEventListener("catalogUpdated", loadCatalog);
     window.addEventListener("homelab:adminCatalog", loadCatalog);
     window.addEventListener("homelab:homelab_payment_methods", loadPayMethods);
+    window.addEventListener("homelab-data-changed", loadPayMethods);
     return () => {
       window.removeEventListener("catalogUpdated", loadCatalog);
       window.removeEventListener("homelab:adminCatalog", loadCatalog);
       window.removeEventListener("homelab:homelab_payment_methods", loadPayMethods);
+      window.removeEventListener("homelab-data-changed", loadPayMethods);
     };
   }, []);
 
@@ -111,7 +128,6 @@ export default function BookTestPage() {
     if (step === 1) return !!date && !!time;
     if (step === 2) return !!address.trim();
     if (step === 3) {
-      // Cash may not need transaction ID; other methods require momo phone + tx id + ref
       if (!selectedMethod) return false;
       if (selectedMethod.id === "cash" || selectedMethod.title?.toLowerCase().includes("cash")) {
         return true;
@@ -123,7 +139,7 @@ export default function BookTestPage() {
 
   const confirm = () => {
     if (!canNext()) {
-      showToast("Please complete all payment fields", "error");
+      showToast("Please select a payment method and complete all fields", "error");
       return;
     }
     const currentUser = getLocal("currentUser", {}) || {};
@@ -309,39 +325,60 @@ export default function BookTestPage() {
               </ul>
             </div>
 
-            {/* Payment options with account name always shown */}
+            {/* All payment options — select one */}
             <div>
-              <p className="text-sm font-semibold text-[#0A1931] mb-2">Pay to one of these accounts</p>
-              <div className="space-y-2">
-                {payMethods.map((m) => (
-                  <label
-                    key={m.id}
-                    className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
-                      selectedMethodId === m.id
-                        ? "border-[#0D6EFD] bg-blue-50/60"
-                        : "border-gray-100 hover:bg-gray-50"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="payMethod"
-                      checked={selectedMethodId === m.id}
-                      onChange={() => setSelectedMethodId(m.id)}
-                      className="mt-1 accent-[#0D6EFD]"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#0A1931]">{m.title}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        <span className="text-gray-400">Number / Account:</span> {m.number}
-                      </p>
-                      <p className="text-xs font-medium text-[#0D6EFD] mt-0.5">
-                        Account name: {m.name || "HomeLab GH"}
-                      </p>
-                    </div>
-                  </label>
-                ))}
+              <p className="text-sm font-semibold text-[#0A1931] mb-1">Select payment method</p>
+              <p className="text-xs text-gray-500 mb-3">
+                Choose where to send payment. Account name is shown under each number.
+              </p>
+              <div className="space-y-3">
+                {payMethods.map((m) => {
+                  const active = selectedMethodId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedMethodId(m.id)}
+                      className={`w-full text-left rounded-xl border-2 p-4 transition ${
+                        active
+                          ? "border-[#0D6EFD] bg-blue-50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                            active ? "border-[#0D6EFD] bg-[#0D6EFD]" : "border-gray-300"
+                          }`}
+                        >
+                          {active && <Check size={12} className="text-white" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-[#0A1931]">{m.title}</p>
+                          {/* Number first, account name directly beneath */}
+                          <p className="mt-2 text-base font-semibold text-[#0A1931] tracking-wide">
+                            {m.number}
+                          </p>
+                          <p className="mt-0.5 text-sm font-medium text-[#0D6EFD]">
+                            {m.name || "HomeLab GH"}
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">Account name</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {selectedMethod && !isCash && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 text-sm">
+                <p className="font-semibold text-[#0A1931]">Pay commitment GH₵ {commitment} to:</p>
+                <p className="mt-1 text-lg font-bold text-[#0A1931]">{selectedMethod.number}</p>
+                <p className="text-sm font-medium text-[#0D6EFD]">{selectedMethod.name || "HomeLab GH"}</p>
+                <p className="text-[11px] text-gray-500">Account name — confirm this matches before sending</p>
+              </div>
+            )}
 
             {!isCash && (
               <>
@@ -382,17 +419,8 @@ export default function BookTestPage() {
 
             {isCash && (
               <p className="text-sm text-gray-600 rounded-xl bg-gray-50 p-3">
-                You chose cash. Pay the commitment and balance when our staff arrives for sample collection.
-                Account name: <strong>{selectedMethod?.name || "HomeLab GH"}</strong>
-              </p>
-            )}
-
-            {selectedMethod && !isCash && (
-              <p className="text-xs text-gray-500">
-                Send <strong>GH₵ {commitment}</strong> (commitment) to{" "}
-                <strong>{selectedMethod.number}</strong> — Account name:{" "}
-                <strong>{selectedMethod.name || "HomeLab GH"}</strong>, then enter the transaction ID and
-                reference below.
+                You chose cash. Pay the commitment and balance when our staff arrives for sample
+                collection.
               </p>
             )}
           </div>
