@@ -22,7 +22,7 @@ const SUPER_ADMIN = "kugoramoweyipehcaesar49@gmail.com";
 const STAFF_KEY = "homelab_staff";
 const ROLES_KEY = "homelab_roles";
 
-const DEFAULT_ROLES = ["Doctor", "Nurse", "Lab Scientist", "Rider", "Admin"];
+const DEFAULT_ROLES = ["Doctor", "Nurse", "Lab Scientist", "Admin"];
 
 const AREAS = [
   "Phlebotomy",
@@ -39,7 +39,6 @@ const ROLE_STYLE = {
   Doctor: "bg-indigo-100 text-indigo-700",
   Nurse: "bg-blue-100 text-blue-700",
   "Lab Scientist": "bg-violet-100 text-violet-700",
-  Rider: "bg-orange-100 text-orange-700",
   Admin: "bg-slate-800 text-white",
 };
 
@@ -78,10 +77,10 @@ const SEED = [
     id: 3,
     name: "Kwame Boateng",
     email: "k.boateng@homelabgh.com",
-    role: "Rider",
+    role: "Admin",
     phone: "+233 55 742 9931",
     status: "Off Duty",
-    area: "Delivery / Logistics",
+    area: "Front Desk",
     avatar: "KB",
   },
   {
@@ -153,8 +152,11 @@ export default function AdminStaffPage() {
     if (savedStaff?.length) setStaff(savedStaff);
 
     const savedRoles = getLocal(ROLES_KEY, null);
-    if (savedRoles?.length) setRoles(savedRoles);
-    else setLocal(ROLES_KEY, DEFAULT_ROLES);
+    if (savedRoles?.length) {
+      const cleaned = savedRoles.filter((r) => r !== "Rider");
+      setRoles(cleaned.length ? cleaned : DEFAULT_ROLES);
+      setLocal(ROLES_KEY, cleaned.length ? cleaned : DEFAULT_ROLES);
+    } else setLocal(ROLES_KEY, DEFAULT_ROLES);
 
     setLoaded(true);
   }, []);
@@ -416,8 +418,7 @@ export default function AdminStaffPage() {
                   </td>
                   <td className="py-3.5 pr-3">
                     <span
-                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                        ROLE_STYLE[st.role] || "bg-slate-100 text-slate-700"
+                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${\n                        ROLE_STYLE[st.role] || "bg-slate-100 text-slate-700"
                       }`}
                     >
                       {st.role}
@@ -527,7 +528,6 @@ export default function AdminStaffPage() {
         </p>
       </div>
 
-      {/* Add / Edit modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <form
@@ -545,42 +545,19 @@ export default function AdminStaffPage() {
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Staff Name *</label>
-                <input
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                  placeholder="e.g. Dr. Ama Serwah"
-                />
+                <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]" placeholder="e.g. Dr. Ama Serwah" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Email *</label>
-                <input
-                  required
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                  placeholder="ama.serwah@homelabgh.com"
-                />
+                <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]" placeholder="ama.serwah@homelabgh.com" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Phone *</label>
-                <input
-                  required
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                  placeholder="+233 24 555 1201"
-                />
+                <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]" placeholder="+233 24 555 1201" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Role *</label>
-                <select
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                >
+                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]">
                   {roles.map((r) => (
                     <option key={r}>{r}</option>
                   ))}
@@ -588,11 +565,7 @@ export default function AdminStaffPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Status *</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                >
+                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]">
                   <option>Active</option>
                   <option>Off Duty</option>
                   <option>On Leave</option>
@@ -600,14 +573,7 @@ export default function AdminStaffPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Assigned Area *</label>
-                <input
-                  required
-                  list="area-list"
-                  value={form.area}
-                  onChange={(e) => setForm({ ...form, area: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
-                  placeholder="Phlebotomy"
-                />
+                <input required list="area-list" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]" placeholder="Phlebotomy" />
                 <datalist id="area-list">
                   {AREAS.map((a) => (
                     <option key={a} value={a} />
@@ -616,107 +582,57 @@ export default function AdminStaffPage() {
               </div>
             </div>
             <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white"
-              >
-                {editingId ? "Save Changes" : "Add Staff"}
-              </button>
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium">Cancel</button>
+              <button type="submit" className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">{editingId ? "Save Changes" : "Add Staff"}</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Manage Roles (super admin) */}
       {showRoles && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-[#0F172A]">Manage Roles</h3>
-              <button type="button" onClick={() => setShowRoles(false)} className="rounded-lg p-1 hover:bg-slate-100">
-                <X className="h-5 w-5" />
-              </button>
+              <button type="button" onClick={() => setShowRoles(false)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
             <ul className="mb-4 max-h-48 space-y-1 overflow-y-auto">
               {roles.map((r) => (
-                <li
-                  key={r}
-                  className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-sm"
-                >
+                <li key={r} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-sm">
                   <span className="font-medium text-[#0F172A]">{r}</span>
-                  <button
-                    type="button"
-                    onClick={() => deleteRole(r)}
-                    className="rounded p-1 text-red-500 hover:bg-red-50"
-                    title="Delete role"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <button type="button" onClick={() => deleteRole(r)} className="rounded p-1 text-red-500 hover:bg-red-50" title="Delete role"><Trash2 className="h-3.5 w-3.5" /></button>
                 </li>
               ))}
             </ul>
             <form onSubmit={addRole} className="flex gap-2">
-              <input
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-                placeholder="e.g. Pharmacist"
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#2563EB]"
-              />
-              <button type="submit" className="rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white">
-                Add Role
-              </button>
+              <input value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder="e.g. Pharmacist" className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#2563EB]" />
+              <button type="submit" className="rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white">Add Role</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* View profile */}
       {viewStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-[#0F172A]">Staff Profile</h3>
-              <button type="button" onClick={() => setViewId(null)} className="rounded-lg p-1 hover:bg-slate-100">
-                <X className="h-5 w-5" />
-              </button>
+              <button type="button" onClick={() => setViewId(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2563EB] text-sm font-bold text-white">
-                {viewStaff.avatar || makeAvatar(viewStaff.name)}
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2563EB] text-sm font-bold text-white">{viewStaff.avatar || makeAvatar(viewStaff.name)}</div>
               <div>
                 <p className="font-bold text-[#0F172A]">{viewStaff.name}</p>
                 <p className="text-xs text-slate-500">{viewStaff.email}</p>
               </div>
             </div>
             <div className="space-y-2 text-sm text-slate-600">
-              <p>
-                <span className="text-slate-400">Role:</span> {viewStaff.role}
-              </p>
-              <p>
-                <span className="text-slate-400">Phone:</span> {viewStaff.phone}
-              </p>
-              <p>
-                <span className="text-slate-400">Status:</span> {viewStaff.status}
-              </p>
-              <p>
-                <span className="text-slate-400">Area:</span> {viewStaff.area}
-              </p>
+              <p><span className="text-slate-400">Role:</span> {viewStaff.role}</p>
+              <p><span className="text-slate-400">Phone:</span> {viewStaff.phone}</p>
+              <p><span className="text-slate-400">Status:</span> {viewStaff.status}</p>
+              <p><span className="text-slate-400">Area:</span> {viewStaff.area}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => openEdit(viewStaff)}
-              className="mt-5 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white"
-            >
-              Edit Staff
-            </button>
+            <button type="button" onClick={() => openEdit(viewStaff)} className="mt-5 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">Edit Staff</button>
           </div>
         </div>
       )}
