@@ -12,12 +12,14 @@ import {
   CreditCard,
   UserCog,
   Settings,
-  HelpCircle,
+  Wrench,
   LogOut,
   FlaskConical,
   Menu,
   X,
 } from "lucide-react";
+
+const SUPER_ADMIN = "kugoramoweyipehcaesar49@gmail.com";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -34,9 +36,15 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const email = typeof window !== "undefined" ? localStorage.getItem("admin_email") || "" : "";
+    setIsSuperAdmin(email === SUPER_ADMIN);
   }, [pathname]);
 
   useEffect(() => {
@@ -54,6 +62,9 @@ export default function AdminSidebar() {
     }
     router.push("/login");
   }
+
+  const maintenanceActive =
+    pathname === "/admin/maintenance" || pathname?.startsWith("/admin/maintenance/");
 
   const sidebarBody = (
     <>
@@ -100,14 +111,20 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
-        <Link
-          href="/admin/settings"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
-        >
-          <HelpCircle className="h-[18px] w-[18px]" />
-          Help & Support
-        </Link>
+        {isSuperAdmin && (
+          <Link
+            href="/admin/maintenance"
+            onClick={() => setOpen(false)}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              maintenanceActive
+                ? "bg-red-600 text-white shadow-lg shadow-red-900/30"
+                : "text-slate-400 hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            <Wrench className="h-[18px] w-[18px]" />
+            Maintenance
+          </Link>
+        )}
       </nav>
 
       <div className="border-t border-white/10 p-4">
