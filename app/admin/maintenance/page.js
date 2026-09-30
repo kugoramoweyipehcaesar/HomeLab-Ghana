@@ -5,72 +5,124 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Trash2, RotateCcw } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { setLocal } from "@/lib/utils";
+import { KEYS } from "@/lib/store";
+
+/** Every localStorage key used across admin + public site */
+const ALL_DATA_KEYS = [
+  KEYS.bookings,
+  KEYS.bookingsAlt,
+  KEYS.clients,
+  KEYS.results,
+  KEYS.payments,
+  KEYS.paymentMethods,
+  "homelab_staff",
+  "adminStaff",
+  "homelab_roles",
+  "adminCatalog",
+  "testPrices",
+  "cart",
+  "adminSettings",
+  "paymentOptions",
+  "admin_notifications",
+];
 
 const SECTIONS = [
   {
     id: "bookings",
     label: "Bookings & public bookings",
-    keys: ["bookings", "homelab_bookings"],
-    empty: { bookings: [], homelab_bookings: [] },
-    events: ["bookingsUpdated", "homelab-data-changed"],
+    keys: [KEYS.bookings, KEYS.bookingsAlt, "bookings", "homelab_bookings"],
+    empty: { [KEYS.bookings]: [], [KEYS.bookingsAlt]: [] },
   },
   {
     id: "clients",
     label: "Clients",
-    keys: ["homelab_clients"],
-    empty: { homelab_clients: [] },
-    events: ["homelab-data-changed"],
+    keys: [KEYS.clients, "homelab_clients"],
+    empty: { [KEYS.clients]: [] },
   },
   {
     id: "staff",
     label: "Staff & roles",
     keys: ["homelab_staff", "adminStaff", "homelab_roles"],
-    empty: { homelab_staff: [], adminStaff: [], homelab_roles: ["Super Admin", "Admin", "Doctor", "Nurse", "Lab Scientist"] },
-    events: ["homelab-data-changed"],
+    empty: {
+      homelab_staff: [],
+      adminStaff: [],
+      homelab_roles: ["Super Admin", "Admin", "Doctor", "Nurse", "Lab Scientist"],
+    },
   },
   {
     id: "catalog",
     label: "Catalog / test prices",
     keys: ["adminCatalog", "testPrices"],
     empty: {},
-    events: ["catalogUpdated", "homelab:adminCatalog", "homelab-data-changed"],
   },
   {
     id: "results",
     label: "Results uploads",
-    keys: ["homelab_results"],
-    empty: { homelab_results: [] },
-    events: ["homelab-data-changed"],
+    keys: [KEYS.results, "homelab_results"],
+    empty: { [KEYS.results]: [] },
   },
   {
     id: "payments",
     label: "Payments & payment methods",
-    keys: ["homelab_payments", "homelab_payment_methods", "paymentOptions"],
-    empty: { homelab_payments: [], paymentOptions: {} },
-    events: ["homelab:homelab_payment_methods", "homelab-data-changed"],
+    keys: [KEYS.payments, KEYS.paymentMethods, "homelab_payments", "homelab_payment_methods", "paymentOptions"],
+    empty: {
+      [KEYS.payments]: [],
+      [KEYS.paymentMethods]: null,
+      paymentOptions: {},
+    },
   },
   {
     id: "cart",
     label: "Cart",
     keys: ["cart"],
     empty: { cart: [] },
-    events: ["homelab-data-changed"],
   },
 ];
 
-function fireEvents(names) {
+function broadcastSiteWide(sectionId) {
   if (typeof window === "undefined") return;
-  names.forEach((n) => {
-    if (n === "homelab-data-changed") {
-      window.dispatchEvent(new CustomEvent("homelab-data-changed", { detail: { key: "reset" } }));
-    } else {
+  const events = [
+    "bookingsUpdated",
+    "catalogUpdated",
+    "homelab:adminCatalog",
+    "homelab:homelab_payment_methods",
+    "homelab:homelab_bookings",
+    "homelab:bookings",
+    "homelab:homelab_clients",
+    "homelab:homelab_results",
+    "homelab:homelab_payments",
+    "homelab:homelab_staff",
+    "storage",
+  ];
+  events.forEach((n) => {
+    try {
       window.dispatchEvent(new Event(n));
+    } catch {
+      /* ignore */
     }
   });
+  window.dispatchEvent(
+    new CustomEvent("homelab-data-changed", {
+      detail: { key: sectionId || "reset", source: "maintenance" },
+    })
+  );
+  // Force same-tab listeners that only watch storage via a synthetic storage event
+  try {
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: sectionId || "homelab_reset",
+        newValue: null,
+        storageArea: localStorage,
+      })
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 function resetSection(section) {
-  section.keys.forEach((k) => {
+  const keys = [...new Set(section.keys || [])];
+  keys.forEach((k) => {
     try {
       localStorage.removeItem(k);
     } catch {
@@ -78,9 +130,17 @@ function resetSection(section) {
     }
   });
   Object.entries(section.empty || {}).forEach(([k, v]) => {
-    setLocal(k, v);
+    if (v === null) {
+      try {
+        localStorage.removeItem(k);
+      } catch {
+        /* ignore */
+      }
+    } else {
+      setLocal(k, v);
+    }
   });
-  fireEvents(section.events || []);
+  broadcastSiteWide(section.id);
 }
 
 export default function AdminMaintenancePage() {
@@ -91,11 +151,13 @@ export default function AdminMaintenancePage() {
   const [resettingId, setResettingId] = useState(null);
 
   function handleSectionReset(section) {
-    if (!window.confirm(`Reset “${section.label}” only? This cannot be undone.`)) return;
+    if (!window.confirm(`Reset “${section.label}” only? This updates the whole site for this browser.`)) {
+      return;
+    }
     setResettingId(section.id);
     try {
       resetSection(section);
-      showToast(`Reset: ${section.label}`);
+      showToast(`Reset: ${section.label} — site updated`);
     } catch {
       showToast("Reset failed", "error");
     } finally {
@@ -108,24 +170,30 @@ export default function AdminMaintenancePage() {
       showToast("Type RESET to confirm", "error");
       return;
     }
-    if (
-      !window.confirm(
-        "This will erase ALL listed data in this browser. Continue?"
-      )
-    ) {
-      return;
-    }
+    if (!window.confirm("Erase ALL listed data site-wide in this browser?")) return;
     setBusy(true);
     try {
       SECTIONS.forEach((s) => resetSection(s));
-      try {
-        localStorage.removeItem("adminSettings");
-      } catch {
-        /* ignore */
-      }
-      showToast("All website data reset successfully");
+      ALL_DATA_KEYS.forEach((k) => {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          /* ignore */
+        }
+      });
+      // Re-seed empty structures so pages don't crash
+      setLocal(KEYS.bookings, []);
+      setLocal(KEYS.bookingsAlt, []);
+      setLocal(KEYS.clients, []);
+      setLocal(KEYS.results, []);
+      setLocal(KEYS.payments, []);
+      setLocal("cart", []);
+      setLocal("homelab_staff", []);
+      setLocal("adminStaff", []);
+      broadcastSiteWide("all");
+      showToast("All website data reset — site updated");
       setConfirmText("");
-      setTimeout(() => router.push("/admin"), 800);
+      setTimeout(() => router.push("/admin"), 600);
     } catch {
       showToast("Reset failed", "error");
     } finally {
@@ -138,22 +206,19 @@ export default function AdminMaintenancePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#0F172A]">Maintenance</h1>
         <p className="text-sm text-slate-500">
-          Reset individual sections or clear everything stored in this browser
+          Each reset clears data for the whole site (admin + public) in this browser
         </p>
       </div>
 
-      {/* Per-section resets */}
       <div className="mb-8 max-w-xl rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h2 className="mb-1 text-lg font-bold text-[#0F172A]">Reset by section</h2>
         <p className="mb-4 text-xs text-slate-500">
-          Each button clears only that data. Changes apply immediately on this device.
+          Wired to localStorage keys used by Bookings, Clients, Staff, Catalog, Results, Payments, and
+          public booking/cart pages.
         </p>
         <ul className="divide-y divide-slate-100">
           {SECTIONS.map((section) => (
-            <li
-              key={section.id}
-              className="flex flex-wrap items-center justify-between gap-3 py-3"
-            >
+            <li key={section.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <span className="text-sm font-medium text-[#0F172A]">{section.label}</span>
               <button
                 type="button"
@@ -169,7 +234,6 @@ export default function AdminMaintenancePage() {
         </ul>
       </div>
 
-      {/* Full reset */}
       <div className="max-w-xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-start gap-3">
           <div className="rounded-xl bg-red-50 p-2">
@@ -178,8 +242,7 @@ export default function AdminMaintenancePage() {
           <div>
             <h2 className="text-lg font-bold text-[#0F172A]">Reset everything</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Clears all sections above at once (bookings, clients, staff, catalog, results,
-              payments, cart).
+              Clears all sections above and related keys across the website.
             </p>
           </div>
         </div>
