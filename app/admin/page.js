@@ -179,9 +179,7 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Search — responsive */}
           <div className="relative" ref={searchRef}>
-            {/* Mobile: icon that expands */}
             <button
               type="button"
               className="sm:hidden rounded-xl border border-slate-200 bg-white p-2.5"
@@ -245,7 +243,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Notification bell */}
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -307,7 +304,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <Link
-            href="/admin/bookings"
+            href="/admin/bookings?new=1"
             className="inline-flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-3 sm:px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-600"
           >
             <Plus className="h-4 w-4" />
@@ -316,7 +313,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Stats only — Recent Bookings removed */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
           <div
