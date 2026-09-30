@@ -18,6 +18,8 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import { SUPER_ADMIN, isSuperAdminEmail } from "@/lib/auth";
+import { getLocal } from "@/lib/utils";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -35,9 +37,46 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("Admin");
+  const [initials, setInitials] = useState("AD");
+  const [roleLabel, setRoleLabel] = useState("Admin · Online");
 
   useEffect(() => {
     setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function loadUser() {
+      const email =
+        localStorage.getItem("admin_email") ||
+        getLocal("currentUser", {})?.email ||
+        "";
+      const user = getLocal("currentUser", {}) || {};
+      if (isSuperAdminEmail(email) || isSuperAdminEmail(user.email)) {
+        setDisplayName("Super Admin");
+        setInitials("SA");
+        setRoleLabel("Super Admin · Online");
+      } else {
+        const name = user.fullName || user.name || "Admin";
+        setDisplayName(name);
+        setInitials(
+          name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase() || "AD"
+        );
+        setRoleLabel((user.role || "Admin") + " · Online");
+      }
+    }
+    loadUser();
+    window.addEventListener("storage", loadUser);
+    window.addEventListener("homelab-data-changed", loadUser);
+    return () => {
+      window.removeEventListener("storage", loadUser);
+      window.removeEventListener("homelab-data-changed", loadUser);
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -51,6 +90,7 @@ export default function AdminSidebar() {
   function logout() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("isAdmin");
+      localStorage.removeItem("admin_email");
       localStorage.removeItem("currentUser");
     }
     router.push("/login");
@@ -109,11 +149,11 @@ export default function AdminSidebar() {
       <div className="border-t border-white/10 p-4">
         <div className="mb-3 flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2563EB] text-xs font-bold">
-            KM
+            {initials}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Dr. Kojo Mensah</p>
-            <p className="text-[11px] text-emerald-400">Admin · Online</p>
+            <p className="truncate text-sm font-semibold">{displayName}</p>
+            <p className="text-[11px] text-emerald-400">{roleLabel}</p>
           </div>
         </div>
         <button
