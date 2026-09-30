@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import {
   Search,
   Plus,
@@ -92,7 +91,6 @@ const AVATAR = ["bg-blue-500", "bg-emerald-500", "bg-pink-500", "bg-orange-500",
 
 export default function AdminBookingsPage() {
   const { showToast } = useToast();
-  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -104,14 +102,11 @@ export default function AdminBookingsPage() {
     const b = getLocal("bookings", []);
     setBookings(b.length ? b : SEED);
     setCatalog(getActiveCatalog());
-  }, []);
-
-  // Open form when arriving from Dashboard "New Booking" with ?new=1
-  useEffect(() => {
-    if (searchParams?.get("new") === "1") {
+    // Open form when arriving from Dashboard with ?new=1
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1") {
       setShowModal(true);
     }
-  }, [searchParams]);
+  }, []);
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -377,7 +372,6 @@ export default function AdminBookingsPage() {
         </p>
       </div>
 
-      {/* New Booking modal — client details + tests */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <form
