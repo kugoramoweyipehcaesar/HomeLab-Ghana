@@ -48,7 +48,7 @@ export default function AdminLayout({ children }) {
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4">
         <form
           onSubmit={handleLogin}
-          className="w-full max-w-md rounded-2xl border border-slate-100 bg-white p-8 shadow-xl"
+          className="w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 sm:p-8 shadow-xl"
         >
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB] text-lg font-bold text-white">
@@ -90,7 +90,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />
-      <div className="ml-64 min-h-screen">{children}</div>
+      <div className="min-h-screen pt-14 lg:pt-0 lg:ml-64">{children}</div>
     </div>
   );
 }
