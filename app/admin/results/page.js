@@ -1,161 +1,402 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
-  Bell,
   Upload,
   Clock,
   CheckCircle2,
   FileUp,
   X,
+  Eye,
+  Shield,
+  Download,
+  Edit2,
+  AlertCircle,
+  FileText,
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
-import { getLocal, setLocal } from "@/lib/utils";
 
-const SEED_UPLOADS = [
-  { id: 1, clinic: "Acme Clinic", test: "CBC Panel", size: "2.4 MB", status: "uploading", progress: 65 },
-  { id: 2, clinic: "Northshore Med", test: "Lipid Panel", size: "1.8 MB", status: "pending" },
-  { id: 3, clinic: "CityCare Labs", test: "COVID-19 PCR", size: "3.1 MB", status: "completed" },
+const STORAGE_KEY = "homelab_results";
+const SUPER_ADMIN = "kugoramoweyipehcaesar49@gmail.com";
+const VIEW_CODE = "106585";
+
+const INITIAL = [
+  {
+    id: 1,
+    client: "Ama Boateng",
+    test: "PCR Test",
+    date: "Oct 14, 2024",
+    status: "pending_upload",
+    file: null,
+    notes: "",
+    uploadedBy: null,
+    uploadDate: null,
+    lastUpdated: null,
+    approvedBy: null,
+    approvedAt: null,
+    rejectReason: null,
+  },
+  {
+    id: 2,
+    client: "Kwame Asamoah",
+    test: "Blood Panel",
+    date: "Oct 13, 2024",
+    status: "completed",
+    file: "Kwame_BloodPanel_Oct13.pdf",
+    notes: "Results within normal range",
+    uploadedBy: "Dr. Kojo Mensah",
+    uploadDate: "Oct 13, 2024",
+    lastUpdated: "Oct 13, 2024 - 2:30 PM",
+    approvedBy: SUPER_ADMIN,
+    approvedAt: "Oct 13, 2024",
+    rejectReason: null,
+  },
+  {
+    id: 3,
+    client: "Esi Mensah",
+    test: "COVID Test",
+    date: "Oct 12, 2024",
+    status: "pending_approval",
+    file: "Esi_COVID_Oct12.pdf",
+    notes: "Awaiting super admin review",
+    uploadedBy: "Dr. Kojo Mensah",
+    uploadDate: "Oct 12, 2024",
+    lastUpdated: "Oct 12, 2024 - 4:10 PM",
+    approvedBy: null,
+    approvedAt: null,
+    rejectReason: null,
+    awaiting: SUPER_ADMIN,
+  },
+  {
+    id: 4,
+    client: "John Opoku",
+    test: "Malaria Test",
+    date: "Oct 12, 2024",
+    status: "pending_upload",
+    file: null,
+    notes: "",
+    uploadedBy: null,
+    uploadDate: null,
+    lastUpdated: null,
+    approvedBy: null,
+    approvedAt: null,
+    rejectReason: null,
+  },
 ];
 
-const SEED_APPROVAL = [
-  { id: "RES-10284", client: "Acme Clinic", test: "CBC Panel", uploaded: "Today, 10:32 AM", status: "Ready for Review" },
-  { id: "RES-10281", client: "Northshore Med", test: "Lipid Panel", uploaded: "Today, 09:15 AM", status: "Ready for Review" },
-  { id: "RES-10277", client: "CityCare Labs", test: "COVID-19 PCR", uploaded: "Today, 08:41 AM", status: "Verified" },
-];
+function todayLabel() {
+  return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function nowStamp() {
+  const d = new Date();
+  return (
+    d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) +
+    " - " +
+    d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" })
+  );
+}
+
+function statusBadge(status) {
+  if (status === "pending_upload")
+    return { label: "Pending Upload", className: "bg-amber-100 text-amber-700" };
+  if (status === "completed")
+    return { label: "Completed", className: "bg-emerald-100 text-emerald-700" };
+  if (status === "pending_approval")
+    return { label: "Pending Approval from Super Admin", className: "bg-blue-100 text-blue-700" };
+  return { label: status, className: "bg-slate-100 text-slate-600" };
+}
 
 export default function AdminResultsPage() {
   const { showToast } = useToast();
   const fileRef = useRef(null);
-  const [uploads, setUploads] = useState(SEED_UPLOADS);
-  const [approvals, setApprovals] = useState(SEED_APPROVAL);
+  const uploadFileRef = useRef(null);
+
+  const [results, setResults] = useState(INITIAL);
+  const [loaded, setLoaded] = useState(false);
+  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState("all");
   const [dragging, setDragging] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [meta, setMeta] = useState({ client: "", test: "", fileName: "" });
+
+  // Upload modal (for a specific pending item)
+  const [uploadTarget, setUploadTarget] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadNotes, setUploadNotes] = useState("");
+
+  // Drop-assign modal (from top drag zone)
+  const [dropFile, setDropFile] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState("");
+
+  // Security code
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [codeTargetId, setCodeTargetId] = useState(null);
+
+  // Viewer
+  const [viewId, setViewId] = useState(null);
+
+  // Edit / re-upload
+  const [editId, setEditId] = useState(null);
+  const [editNotes, setEditNotes] = useState("");
+  const [editFile, setEditFile] = useState(null);
+
+  const currentUserEmail =
+    typeof window !== "undefined"
+      ? localStorage.getItem("admin_email") || "Dr. Kojo Mensah"
+      : "Dr. Kojo Mensah";
+  const isSuperAdmin = currentUserEmail === SUPER_ADMIN;
 
   useEffect(() => {
-    const u = getLocal("adminUploads", null);
-    const a = getLocal("adminApprovals", null);
-    if (u?.length) setUploads(u);
-    if (a?.length) setApprovals(a);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) setResults(parsed);
+      }
+    } catch {
+      /* keep initial */
+    }
+    setLoaded(true);
   }, []);
 
-  function approve(id) {
-    const next = approvals.map((r) =>
-      r.id === id ? { ...r, status: "Verified" } : r
-    );
-    setApprovals(next);
-    setLocal("adminApprovals", next);
-
-    const bookings = getLocal("bookings", []);
-    if (bookings.length) {
-      const updated = bookings.map((b, i) =>
-        i === 0 ? { ...b, status: "Ready" } : b
-      );
-      setLocal("bookings", updated);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+    } catch {
+      /* ignore */
     }
-    showToast(`${id} approved — client notified`);
-  }
+  }, [results, loaded]);
 
-  function handleFiles(files) {
-    const file = files?.[0];
-    if (!file) return;
+  const stats = useMemo(() => {
+    const pending = results.filter((r) => r.status === "pending_upload").length;
+    const completed = results.filter((r) => r.status === "completed").length;
+    const pendingApproval = results.filter((r) => r.status === "pending_approval").length;
+    const today = todayLabel();
+    const uploadedToday = results.filter(
+      (r) => r.uploadDate && (r.uploadDate === today || r.uploadDate.includes(today.split(",")[0]))
+    ).length;
+    return { pending, completed, pendingApproval, uploadedToday };
+  }, [results]);
+
+  const filtered = useMemo(() => {
+    let list = results;
+    if (tab === "pending_upload") list = list.filter((r) => r.status === "pending_upload");
+    if (tab === "completed") list = list.filter((r) => r.status === "completed");
+    if (tab === "pending_approval") list = list.filter((r) => r.status === "pending_approval");
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.client?.toLowerCase().includes(q) ||
+          r.test?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [results, tab, search]);
+
+  const pendingList = results.filter((r) => r.status === "pending_upload");
+
+  function validatePdf(file) {
+    if (!file) return false;
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       showToast("Only PDF files are allowed", "error");
-      return;
+      return false;
     }
     if (file.size > 20 * 1024 * 1024) {
       showToast("Max file size is 20MB", "error");
+      return false;
+    }
+    return true;
+  }
+
+  function openUpload(row) {
+    setUploadTarget(row);
+    setUploadFile(null);
+    setUploadNotes("");
+  }
+
+  function submitUpload(e) {
+    e.preventDefault();
+    if (!uploadTarget) return;
+    if (!uploadFile) {
+      showToast("Select a PDF file", "error");
       return;
     }
-    setMeta((m) => ({
-      ...m,
-      fileName: file.name,
-      test: m.test || file.name.replace(/\.pdf$/i, ""),
-    }));
-    setShowForm(true);
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === uploadTarget.id
+          ? {
+              ...r,
+              status: "pending_approval",
+              file: uploadFile.name,
+              notes: uploadNotes.trim(),
+              uploadedBy: currentUserEmail,
+              uploadDate: todayLabel(),
+              lastUpdated: nowStamp(),
+              awaiting: SUPER_ADMIN,
+              rejectReason: null,
+            }
+          : r
+      )
+    );
+    showToast("Result uploaded - sent to super admin for approval");
+    setUploadTarget(null);
+    setUploadFile(null);
+    setUploadNotes("");
   }
 
-  function confirmUpload(e) {
+  function handleTopDrop(files) {
+    const file = files?.[0];
+    if (!validatePdf(file)) return;
+    setDropFile(file);
+    setDropTargetId(pendingList[0]?.id ? String(pendingList[0].id) : "");
+  }
+
+  function confirmDropAssign(e) {
     e.preventDefault();
-    const id = Date.now();
-    const sizeMb = "1.2 MB";
-    const newUpload = {
-      id,
-      clinic: meta.client || "HomeLab Upload",
-      test: meta.test || meta.fileName,
-      size: sizeMb,
-      status: "uploading",
-      progress: 0,
-    };
-    const nextUploads = [newUpload, ...uploads];
-    setUploads(nextUploads);
-    setLocal("adminUploads", nextUploads);
-    setShowForm(false);
-    showToast(`Uploading ${meta.fileName}…`);
-
-    let progress = 0;
-    const timer = setInterval(() => {
-      progress += 25;
-      setUploads((prev) => {
-        const u = prev.map((x) =>
-          x.id === id
-            ? {
-                ...x,
-                progress,
-                status: progress >= 100 ? "completed" : "uploading",
-              }
-            : x
-        );
-        setLocal("adminUploads", u);
-        return u;
-      });
-      if (progress >= 100) {
-        clearInterval(timer);
-        const resId = `RES-${Math.floor(10000 + Math.random() * 90000)}`;
-        const approval = {
-          id: resId,
-          client: meta.client || "HomeLab Upload",
-          test: meta.test || meta.fileName,
-          uploaded: "Just now",
-          status: "Ready for Review",
-        };
-        setApprovals((prev) => {
-          const a = [approval, ...prev];
-          setLocal("adminApprovals", a);
-          return a;
-        });
-        showToast("Upload complete — pending approval");
-        setMeta({ client: "", test: "", fileName: "" });
-      }
-    }, 400);
+    if (!dropFile || !dropTargetId) {
+      showToast("Select a client/test to attach this PDF", "error");
+      return;
+    }
+    const id = Number(dropTargetId);
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: "pending_approval",
+              file: dropFile.name,
+              notes: "",
+              uploadedBy: currentUserEmail,
+              uploadDate: todayLabel(),
+              lastUpdated: nowStamp(),
+              awaiting: SUPER_ADMIN,
+              rejectReason: null,
+            }
+          : r
+      )
+    );
+    showToast("Result uploaded - sent to super admin for approval");
+    setDropFile(null);
+    setDropTargetId("");
   }
+
+  function requestView(id) {
+    setCodeTargetId(id);
+    setCode("");
+    setCodeError("");
+    setCodeOpen(true);
+  }
+
+  function unlockView(e) {
+    e.preventDefault();
+    if (code !== VIEW_CODE) {
+      setCodeError("Invalid code");
+      return;
+    }
+    setCodeOpen(false);
+    setViewId(codeTargetId);
+    setCode("");
+    setCodeError("");
+  }
+
+  function approveResult(id) {
+    if (!isSuperAdmin) {
+      showToast("Only super admin can approve", "error");
+      return;
+    }
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: "completed",
+              approvedBy: SUPER_ADMIN,
+              approvedAt: nowStamp(),
+              lastUpdated: nowStamp(),
+            }
+          : r
+      )
+    );
+    showToast("Result approved");
+  }
+
+  function rejectResult(id) {
+    if (!isSuperAdmin) return;
+    const reason = prompt("Rejection reason (optional):") || "Rejected by super admin";
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: "pending_upload",
+              file: null,
+              rejectReason: reason,
+              lastUpdated: nowStamp(),
+              approvedBy: null,
+              approvedAt: null,
+            }
+          : r
+      )
+    );
+    showToast("Result rejected — back to pending upload");
+    setViewId(null);
+  }
+
+  function openEdit(row) {
+    setEditId(row.id);
+    setEditNotes(row.notes || "");
+    setEditFile(null);
+  }
+
+  function submitEdit(e) {
+    e.preventDefault();
+    setResults((prev) =>
+      prev.map((r) =>
+        r.id === editId
+          ? {
+              ...r,
+              notes: editNotes.trim(),
+              file: editFile ? editFile.name : r.file,
+              status: editFile ? "pending_approval" : r.status,
+              uploadedBy: editFile ? currentUserEmail : r.uploadedBy,
+              uploadDate: editFile ? todayLabel() : r.uploadDate,
+              lastUpdated: nowStamp(),
+              awaiting: editFile ? SUPER_ADMIN : r.awaiting,
+            }
+          : r
+      )
+    );
+    showToast("Result updated");
+    setEditId(null);
+    setEditFile(null);
+  }
+
+  const viewRow = results.find((r) => r.id === viewId);
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0F172A]">Results Upload</h1>
-          <p className="text-sm text-slate-500">
-            Upload and verify lab results from partner clinics
-          </p>
+          <p className="text-sm text-slate-500">Upload and verify lab results from partner clinics</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input placeholder="Search..." className="w-40 rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm sm:w-52" />
-          </div>
-          <button type="button" className="relative rounded-xl border border-slate-200 bg-white p-2.5">
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-              {approvals.filter((a) => a.status !== "Verified").length}
-            </span>
-          </button>
+        <div className="relative w-full sm:w-56">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search client or test..."
+            className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#2563EB]"
+          />
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+      {/* Stats */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-2 flex items-center gap-2 text-amber-600">
             <div className="rounded-xl bg-amber-50 p-2">
@@ -163,22 +404,40 @@ export default function AdminResultsPage() {
             </div>
             <span className="text-sm font-medium">Pending Results</span>
           </div>
-          <p className="text-4xl font-bold text-[#0F172A]">
-            {approvals.filter((a) => a.status !== "Verified").length}
-          </p>
+          <p className="text-4xl font-bold text-[#0F172A]">{stats.pending}</p>
           <p className="mt-1 text-xs text-slate-500">Awaiting verification</p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-2 flex items-center gap-2 text-emerald-600">
             <div className="rounded-xl bg-emerald-50 p-2">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <span className="text-sm font-medium">Completed Uploads</span>
+          </div>
+          <p className="text-4xl font-bold text-[#0F172A]">{stats.completed}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-2 flex items-center gap-2 text-blue-600">
+            <div className="rounded-xl bg-blue-50 p-2">
+              <Shield className="h-5 w-5" />
+            </div>
+            <span className="text-sm font-medium">Pending Approval</span>
+          </div>
+          <p className="text-4xl font-bold text-[#0F172A]">{stats.pendingApproval}</p>
+          <p className="mt-1 text-xs text-slate-500">Super admin review</p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-2 flex items-center gap-2 text-violet-600">
+            <div className="rounded-xl bg-violet-50 p-2">
               <Upload className="h-5 w-5" />
             </div>
             <span className="text-sm font-medium">Uploaded Today</span>
           </div>
-          <p className="text-4xl font-bold text-[#0F172A]">{uploads.length}</p>
+          <p className="text-4xl font-bold text-[#0F172A]">{stats.uploadedToday}</p>
         </div>
       </div>
 
+      {/* Drag & drop */}
       <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <h2 className="mb-4 font-bold text-[#0F172A]">Upload Lab Results</h2>
         <input
@@ -186,7 +445,7 @@ export default function AdminResultsPage() {
           type="file"
           accept=".pdf,application/pdf"
           className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={(e) => handleTopDrop(e.target.files)}
         />
         <div
           className={`cursor-pointer rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${
@@ -201,7 +460,7 @@ export default function AdminResultsPage() {
           onDrop={(e) => {
             e.preventDefault();
             setDragging(false);
-            handleFiles(e.dataTransfer.files);
+            handleTopDrop(e.dataTransfer.files);
           }}
         >
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
@@ -209,145 +468,407 @@ export default function AdminResultsPage() {
           </div>
           <p className="font-semibold text-[#0F172A]">Drag & drop your lab results PDF here</p>
           <p className="mt-1 text-sm text-[#2563EB] underline">or click to browse</p>
-          <p className="mt-2 text-xs text-slate-500">
-            Supported: PDF only · Max file size 20MB · Encrypted & HIPAA compliant
-          </p>
-          <button
-            type="button"
-            className="mt-4 rounded-xl bg-[#2563EB] px-5 py-2 text-sm font-semibold text-white"
-          >
+          <p className="mt-2 text-xs text-slate-500">Supported: PDF only · Max file size 20MB · Encrypted & HIPAA compliant</p>
+          <button type="button" className="mt-4 rounded-xl bg-[#2563EB] px-5 py-2 text-sm font-semibold text-white">
             Browse Files
           </button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="mb-4 font-bold text-[#0F172A]">
-            Pending Uploads{" "}
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{uploads.length}</span>
-          </h3>
-          <div className="space-y-3">
-            {uploads.map((u) => (
-              <div key={u.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-50 p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                    {(u.clinic || "UP").slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-[#0F172A]">{u.clinic}</p>
-                    <p className="text-xs text-slate-500">{u.test} · {u.size}</p>
-                  </div>
-                </div>
-                <div>
-                  {u.status === "uploading" && (
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                      Uploading {u.progress || 0}%
-                    </span>
-                  )}
-                  {u.status === "pending" && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Pending</span>
-                  )}
-                  {u.status === "completed" && (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Completed</span>
-                  )}
-                  {u.status === "failed" && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">Failed</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Table */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { key: "all", label: "All" },
+            { key: "pending_upload", label: "Pending Uploads" },
+            { key: "completed", label: "Completed Uploads" },
+            { key: "pending_approval", label: "Pending Approval" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                tab === t.key
+                  ? "bg-[#2563EB] text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-bold text-[#0F172A]">Results Pending Approval</h3>
-            <span className="text-xs text-slate-400">{approvals.length} results</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b text-slate-400">
-                  <th className="pb-2 pr-2 font-medium">Result ID</th>
-                  <th className="pb-2 pr-2 font-medium">Client</th>
-                  <th className="pb-2 pr-2 font-medium">Test</th>
-                  <th className="pb-2 pr-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {approvals.map((r) => (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wide text-slate-400">
+                <th className="pb-3 pr-3 font-medium">Client Name</th>
+                <th className="pb-3 pr-3 font-medium">Test Type</th>
+                <th className="pb-3 pr-3 font-medium">Booking Date</th>
+                <th className="pb-3 pr-3 font-medium">Status</th>
+                <th className="pb-3 pr-3 font-medium">Uploaded File</th>
+                <th className="pb-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const badge = statusBadge(r.status);
+                return (
                   <tr key={r.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2.5 pr-2 font-medium text-[#0F172A]">{r.id}</td>
-                    <td className="py-2.5 pr-2 text-slate-600">{r.client}</td>
-                    <td className="py-2.5 pr-2 text-slate-600">{r.test}</td>
-                    <td className="py-2.5 pr-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          r.status === "Verified"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {r.status}
+                    <td className="py-3.5 pr-3 font-medium text-[#0F172A]">{r.client}</td>
+                    <td className="py-3.5 pr-3 text-slate-600">{r.test}</td>
+                    <td className="py-3.5 pr-3 text-slate-600">{r.date}</td>
+                    <td className="py-3.5 pr-3">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}>
+                        {badge.label}
                       </span>
                     </td>
-                    <td className="py-2.5">
-                      {r.status !== "Verified" ? (
-                        <button
-                          type="button"
-                          onClick={() => approve(r.id)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#2563EB] px-2 py-1 text-[10px] font-semibold text-white"
-                        >
-                          <CheckCircle2 className="h-3 w-3" /> Approve
-                        </button>
+                    <td className="py-3.5 pr-3 text-slate-500">
+                      {r.file ? (
+                        <span className="inline-flex items-center gap-1 text-xs">
+                          <FileText className="h-3.5 w-3.5" /> {r.file}
+                        </span>
                       ) : (
-                        <span className="text-[10px] font-medium text-emerald-600">Approved</span>
+                        "—"
                       )}
                     </td>
+                    <td className="py-3.5">
+                      <div className="flex flex-wrap gap-2">
+                        {r.status === "pending_upload" && (
+                          <button
+                            type="button"
+                            onClick={() => openUpload(r)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#2563EB] px-2.5 py-1.5 text-xs font-semibold text-white"
+                          >
+                            <Upload className="h-3.5 w-3.5" /> Upload Results
+                          </button>
+                        )}
+                        {(r.status === "completed" || r.status === "pending_approval") && (
+                          <button
+                            type="button"
+                            onClick={() => requestView(r.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-semibold text-[#2563EB] hover:bg-blue-50"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> View Results
+                          </button>
+                        )}
+                        {r.status === "pending_approval" && isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => approveResult(r.id)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <p className="py-8 text-center text-sm text-slate-500">No results found</p>
+          )}
         </div>
       </div>
 
-      {showForm && (
+      {/* Top drop → assign to pending */}
+      {dropFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={confirmUpload} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <form onSubmit={confirmDropAssign} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#0F172A]">Confirm Upload</h3>
-              <button type="button" onClick={() => setShowForm(false)} className="rounded-lg p-1 hover:bg-slate-100">
+              <h3 className="text-lg font-bold text-[#0F172A]">Assign PDF to client</h3>
+              <button type="button" onClick={() => setDropFile(null)} className="rounded-lg p-1 hover:bg-slate-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mb-3 text-sm text-slate-500">File: <strong>{meta.fileName}</strong></p>
-            <div className="space-y-3">
+            <p className="mb-3 text-sm text-slate-500">
+              File: <strong>{dropFile.name}</strong>
+            </p>
+            {pendingList.length === 0 ? (
+              <p className="text-sm text-amber-600">No pending uploads to attach this file to.</p>
+            ) : (
               <div>
-                <label className="mb-1 block text-xs font-medium">Client / Clinic</label>
-                <input
-                  value={meta.client}
-                  onChange={(e) => setMeta({ ...meta, client: e.target.value })}
-                  className="w-full rounded-xl border px-3 py-2 text-sm"
-                  placeholder="e.g. Accra Home Visit"
-                />
+                <label className="mb-1 block text-xs font-medium">Select client / test *</label>
+                <select
+                  required
+                  value={dropTargetId}
+                  onChange={(e) => setDropTargetId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Choose…</option>
+                  {pendingList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.client} — {p.test}
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => setDropFile(null)} className="flex-1 rounded-xl border py-2.5 text-sm">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!pendingList.length}
+                className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Upload & Send for Approval
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Upload modal for row */}
+      {uploadTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <form
+            onSubmit={submitUpload}
+            className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-xl max-h-[92vh] overflow-y-auto"
+          >
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <label className="mb-1 block text-xs font-medium">Test Type</label>
-                <input
-                  value={meta.test}
-                  onChange={(e) => setMeta({ ...meta, test: e.target.value })}
-                  className="w-full rounded-xl border px-3 py-2 text-sm"
-                  placeholder="e.g. Full Blood Count"
-                />
+                <h3 className="text-lg font-bold text-[#0F172A]">Upload Results</h3>
+                <p className="text-xs text-slate-500">PDF will be sent for super admin approval</p>
+              </div>
+              <button type="button" onClick={() => setUploadTarget(null)} className="rounded-lg p-1 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">Client</p>
+                <p className="font-medium text-[#0F172A]">{uploadTarget.client}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">Test</p>
+                <p className="font-medium text-[#0F172A]">{uploadTarget.test}</p>
               </div>
             </div>
-            <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-xl border py-2.5 text-sm">Cancel</button>
+            <input
+              ref={uploadFileRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (validatePdf(f)) setUploadFile(f);
+              }}
+            />
+            <div
+              className="mb-3 cursor-pointer rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 px-4 py-6 text-center"
+              onClick={() => uploadFileRef.current?.click()}
+            >
+              <FileUp className="mx-auto mb-2 h-6 w-6 text-[#2563EB]" />
+              <p className="text-sm font-medium text-[#0F172A]">
+                {uploadFile ? uploadFile.name : "Drag & drop or browse PDF"}
+              </p>
+              <p className="text-xs text-slate-500">PDF only · max 20MB</p>
+            </div>
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium text-slate-700">Notes</label>
+              <textarea
+                value={uploadNotes}
+                onChange={(e) => setUploadNotes(e.target.value)}
+                rows={2}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#2563EB] resize-none"
+                placeholder="Optional notes for reviewer…"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setUploadTarget(null)} className="flex-1 rounded-xl border py-2.5 text-sm">
+                Cancel
+              </button>
               <button type="submit" className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">
-                Upload & Queue
+                Upload & Send for Approval
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Security code modal */}
+      {codeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={unlockView} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-[#2563EB]" />
+                <h3 className="text-lg font-bold text-[#0F172A]">Enter Security Code</h3>
+              </div>
+              <button type="button" onClick={() => setCodeOpen(false)} className="rounded-lg p-1 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-slate-500">Enter code to view results</p>
+            <input
+              type="password"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value);
+                setCodeError("");
+              }}
+              placeholder="Enter code"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#2563EB]"
+              autoFocus
+            />
+            {codeError && (
+              <p className="mt-2 flex items-center gap-1 text-xs text-red-600">
+                <AlertCircle className="h-3.5 w-3.5" /> {codeError}
+              </p>
+            )}
+            <button type="submit" className="mt-4 w-full rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">
+              Unlock
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Results viewer */}
+      {viewRow && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-xl max-h-[92vh] overflow-y-auto">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#0F172A]">Results Viewer</h3>
+              <button type="button" onClick={() => setViewId(null)} className="rounded-lg p-1 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {viewRow.status === "pending_approval" && (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                Awaiting approval from Super Admin: {SUPER_ADMIN}
+              </div>
+            )}
+
+            <div className="space-y-2 text-sm mb-4">
+              <p>
+                <span className="text-slate-400">Client:</span>{" "}
+                <strong className="text-[#0F172A]">{viewRow.client}</strong>
+              </p>
+              <p>
+                <span className="text-slate-400">Test:</span>{" "}
+                <strong className="text-[#0F172A]">{viewRow.test}</strong>
+              </p>
+              <p>
+                <span className="text-slate-400">File:</span> {viewRow.file || "—"}
+              </p>
+              <p>
+                <span className="text-slate-400">Uploaded by:</span> {viewRow.uploadedBy || "—"}
+              </p>
+              <p>
+                <span className="text-slate-400">Date:</span> {viewRow.uploadDate || "—"}
+              </p>
+              {viewRow.lastUpdated && (
+                <p className="text-xs text-slate-500">Last updated: {viewRow.lastUpdated}</p>
+              )}
+              {viewRow.notes && (
+                <p className="text-slate-600">Notes: {viewRow.notes}</p>
+              )}
+            </div>
+
+            <div className="mb-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+              <div className="text-center">
+                <FileText className="mx-auto mb-2 h-8 w-8" />
+                PDF preview: {viewRow.file || "No file"}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  openEdit(viewRow);
+                  setViewId(null);
+                }}
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold"
+              >
+                <Edit2 className="h-3.5 w-3.5" /> Edit / Update Result
+              </button>
+              {viewRow.status === "pending_approval" && isSuperAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      approveResult(viewRow.id);
+                      setViewId(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve Result
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rejectResult(viewRow.id)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600"
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => showToast(viewRow.file ? `Downloading ${viewRow.file}` : "No file")}
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold"
+              >
+                <Download className="h-3.5 w-3.5" /> Download PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewId(null)}
+                className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / update modal */}
+      {editId != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={submitEdit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#0F172A]">Edit / Update Result</h3>
+              <button type="button" onClick={() => setEditId(null)} className="rounded-lg p-1 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium">Replace PDF (optional)</label>
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (validatePdf(f)) setEditFile(f);
+                }}
+                className="w-full text-sm"
+              />
+              {editFile && <p className="mt-1 text-xs text-slate-500">{editFile.name}</p>}
+              <p className="mt-1 text-[10px] text-slate-400">New PDF will reset status to Pending Approval</p>
+            </div>
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium">Notes</label>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setEditId(null)} className="flex-1 rounded-xl border py-2.5 text-sm">
+                Cancel
+              </button>
+              <button type="submit" className="flex-1 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white">
+                Save Update
               </button>
             </div>
           </form>
