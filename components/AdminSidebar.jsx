@@ -19,8 +19,6 @@ import {
   X,
 } from "lucide-react";
 
-const SUPER_ADMIN = "kugoramoweyipehcaesar49@gmail.com";
-
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/bookings", label: "Bookings", icon: Calendar },
@@ -30,21 +28,16 @@ const NAV = [
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/staff", label: "Staff", icon: UserCog },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/maintenance", label: "Maintenance", icon: Wrench },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     setOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    const email = typeof window !== "undefined" ? localStorage.getItem("admin_email") || "" : "";
-    setIsSuperAdmin(email === SUPER_ADMIN);
   }, [pathname]);
 
   useEffect(() => {
@@ -62,9 +55,6 @@ export default function AdminSidebar() {
     }
     router.push("/login");
   }
-
-  const maintenanceActive =
-    pathname === "/admin/maintenance" || pathname?.startsWith("/admin/maintenance/");
 
   const sidebarBody = (
     <>
@@ -90,11 +80,12 @@ export default function AdminSidebar() {
         Menu
       </p>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-2">
         {NAV.map((item) => {
           const active = item.exact
             ? pathname === item.href
             : pathname === item.href || pathname?.startsWith(item.href + "/");
+          const isMaint = item.href === "/admin/maintenance";
           return (
             <Link
               key={item.href}
@@ -102,7 +93,9 @@ export default function AdminSidebar() {
               onClick={() => setOpen(false)}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? "bg-[#2563EB] text-white shadow-lg shadow-blue-900/30"
+                  ? isMaint
+                    ? "bg-red-600 text-white shadow-lg shadow-red-900/30"
+                    : "bg-[#2563EB] text-white shadow-lg shadow-blue-900/30"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
               }`}
             >
@@ -111,20 +104,6 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
-        {isSuperAdmin && (
-          <Link
-            href="/admin/maintenance"
-            onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              maintenanceActive
-                ? "bg-red-600 text-white shadow-lg shadow-red-900/30"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <Wrench className="h-[18px] w-[18px]" />
-            Maintenance
-          </Link>
-        )}
       </nav>
 
       <div className="border-t border-white/10 p-4">
