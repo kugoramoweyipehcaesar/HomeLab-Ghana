@@ -58,6 +58,12 @@ function normalizeMethods(raw) {
   });
 }
 
+function isCashMethod(m) {
+  if (!m) return false;
+  // Only pure cash-on-collection — not "Telecel Cash"
+  return m.id === "cash" || m.title === "Cash Payment";
+}
+
 export default function BookTestPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -114,6 +120,7 @@ export default function BookTestPage() {
   const total = selected.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
   const commitment = 20;
   const selectedMethod = payMethods.find((m) => m.id === selectedMethodId) || payMethods[0];
+  const isCash = isCashMethod(selectedMethod);
 
   const toggle = (test) => {
     const next = selected.find((s) => s.id === test.id)
@@ -129,9 +136,7 @@ export default function BookTestPage() {
     if (step === 2) return !!address.trim();
     if (step === 3) {
       if (!selectedMethod) return false;
-      if (selectedMethod.id === "cash" || selectedMethod.title?.toLowerCase().includes("cash")) {
-        return true;
-      }
+      if (isCash) return true;
       return !!momo.trim() && !!transactionId.trim() && !!referenceNumber.trim();
     }
     return true;
@@ -165,7 +170,7 @@ export default function BookTestPage() {
       status: "Pending",
       paymentStatus: transactionId ? "Pending Verification" : "Unpaid",
       method: methodTitle,
-      paymentAccountName: accountName,
+      paymentAccountName: isCash ? "" : accountName,
       paymentAccountNumber: accountNumber,
       transactionId: transactionId.trim(),
       referenceNumber: referenceNumber.trim(),
@@ -182,9 +187,6 @@ export default function BookTestPage() {
   };
 
   const minDate = new Date().toISOString().split("T")[0];
-  const isCash =
-    selectedMethod?.id === "cash" ||
-    selectedMethod?.title?.toLowerCase().includes("cash");
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
@@ -240,27 +242,17 @@ export default function BookTestPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Preferred Date</label>
-              <input
-                type="date"
-                min={minDate}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-              />
+              <input type="date" min={minDate} value={date} onChange={(e) => setDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Preferred Time</label>
-              <select
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-              >
+              <select value={time} onChange={(e) => setTime(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none">
                 <option value="">Select time</option>
-                {["08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"].map(
-                  (t) => (
-                    <option key={t}>{t}</option>
-                  )
-                )}
+                {["08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"].map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -270,21 +262,13 @@ export default function BookTestPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Home / Office Address</label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="House number, street, landmark"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-              />
+              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="House number, street, landmark"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">City / Region</label>
-              <select
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-              >
+              <select value={region} onChange={(e) => setRegion(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none">
                 {["Accra", "Kumasi", "Tema", "Cape Coast", "Takoradi", "Other"].map((r) => (
                   <option key={r}>{r}</option>
                 ))}
@@ -292,13 +276,8 @@ export default function BookTestPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Notes (optional)</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Gate code, preferred entrance..."
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none resize-none"
-              />
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Gate code, preferred entrance..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none resize-none" />
             </div>
           </div>
         )}
@@ -325,24 +304,20 @@ export default function BookTestPage() {
               </ul>
             </div>
 
-            {/* All payment options — select one */}
             <div>
               <p className="text-sm font-semibold text-[#0A1931] mb-1">Select payment method</p>
-              <p className="text-xs text-gray-500 mb-3">
-                Choose where to send payment. Account name is shown under each number.
-              </p>
+              <p className="text-xs text-gray-500 mb-3">Choose one option, then complete payment details below</p>
               <div className="space-y-3">
                 {payMethods.map((m) => {
                   const active = selectedMethodId === m.id;
+                  const cash = isCashMethod(m);
                   return (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => setSelectedMethodId(m.id)}
                       className={`w-full text-left rounded-xl border-2 p-4 transition ${
-                        active
-                          ? "border-[#0D6EFD] bg-blue-50 shadow-sm"
-                          : "border-gray-200 bg-white hover:border-gray-300"
+                        active ? "border-[#0D6EFD] bg-blue-50 shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -355,14 +330,13 @@ export default function BookTestPage() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-bold text-[#0A1931]">{m.title}</p>
-                          {/* Number first, account name directly beneath */}
-                          <p className="mt-2 text-base font-semibold text-[#0A1931] tracking-wide">
-                            {m.number}
-                          </p>
-                          <p className="mt-0.5 text-sm font-medium text-[#0D6EFD]">
-                            {m.name || "HomeLab GH"}
-                          </p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">Account name</p>
+                          <p className="mt-2 text-base font-semibold text-[#0A1931] tracking-wide">{m.number}</p>
+                          {!cash && (
+                            <>
+                              <p className="mt-0.5 text-sm font-medium text-[#0D6EFD]">{m.name || "HomeLab GH"}</p>
+                              <p className="text-[11px] text-gray-400 mt-0.5">Account name</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -380,47 +354,35 @@ export default function BookTestPage() {
               </div>
             )}
 
+            {/* TX ID + reference for MTN, Telecel Cash, Bank (not cash-on-collection) */}
             {!isCash && (
-              <>
+              <div className="space-y-3 rounded-xl border border-gray-100 p-4">
+                <p className="text-sm font-semibold text-[#0A1931]">
+                  Payment details ({selectedMethod?.title})
+                </p>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Your MoMo / Phone number *</label>
-                  <input
-                    type="tel"
-                    value={momo}
-                    onChange={(e) => setMomo(e.target.value)}
-                    placeholder="+233 24 000 0000"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-                  />
+                  <input type="tel" value={momo} onChange={(e) => setMomo(e.target.value)} placeholder="+233 24 000 0000"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Transaction ID *</label>
-                  <input
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="e.g. 4567890123"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-                  />
+                  <input type="text" value={transactionId} onChange={(e) => setTransactionId(e.target.value)} placeholder="e.g. 4567890123"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
                   <p className="text-xs text-gray-500 mt-1">From your MoMo or bank SMS after payment</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Reference number *</label>
-                  <input
-                    type="text"
-                    value={referenceNumber}
-                    onChange={(e) => setReferenceNumber(e.target.value)}
-                    placeholder="e.g. REF-HLG-001 or name used"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none"
-                  />
+                  <input type="text" value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="e.g. REF-HLG-001 or name used"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Reference or name you used when sending the payment</p>
                 </div>
-              </>
+              </div>
             )}
 
             {isCash && (
               <p className="text-sm text-gray-600 rounded-xl bg-gray-50 p-3">
-                You chose cash. Pay the commitment and balance when our staff arrives for sample
-                collection.
+                You chose cash. Pay the commitment and balance when our staff arrives for sample collection.
               </p>
             )}
           </div>
@@ -429,30 +391,17 @@ export default function BookTestPage() {
 
       <div className="flex gap-3">
         {step > 0 && (
-          <button
-            type="button"
-            onClick={() => setStep((s) => s - 1)}
-            className="btn-outline px-4 py-3 text-sm flex items-center gap-1"
-          >
+          <button type="button" onClick={() => setStep((s) => s - 1)} className="btn-outline px-4 py-3 text-sm flex items-center gap-1">
             <ChevronLeft size={18} /> Back
           </button>
         )}
         {step < STEPS.length - 1 ? (
-          <button
-            type="button"
-            disabled={!canNext()}
-            onClick={() => setStep((s) => s + 1)}
-            className="btn-primary flex-1 px-4 py-3 text-sm flex items-center justify-center gap-1 disabled:opacity-50"
-          >
+          <button type="button" disabled={!canNext()} onClick={() => setStep((s) => s + 1)}
+            className="btn-primary flex-1 px-4 py-3 text-sm flex items-center justify-center gap-1 disabled:opacity-50">
             Continue <ChevronRight size={18} />
           </button>
         ) : (
-          <button
-            type="button"
-            disabled={!canNext()}
-            onClick={confirm}
-            className="btn-primary flex-1 px-4 py-3 text-sm disabled:opacity-50"
-          >
+          <button type="button" disabled={!canNext()} onClick={confirm} className="btn-primary flex-1 px-4 py-3 text-sm disabled:opacity-50">
             Confirm Booking · GH₵ {total + commitment}
           </button>
         )}
