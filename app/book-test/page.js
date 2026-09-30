@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getLocal, setLocal } from "@/lib/utils";
 import { getActiveCatalog } from "@/lib/catalog";
+import { getAllBookings, saveBookings, getPaymentMethods } from "@/lib/store";
 import { useToast } from "@/components/ToastProvider";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 
@@ -21,8 +22,9 @@ export default function BookTestPage() {
   const [region, setRegion] = useState("Accra");
   const [momo, setMomo] = useState("");
   const [notes, setNotes] = useState("");
+  const [payMethods, setPayMethods] = useState([]);
 
-  useEffect(() => {
+  const loadCatalog = () => {
     const catalog = getActiveCatalog();
     setAllTests(catalog);
     const cart = getLocal("cart", []);
@@ -31,6 +33,18 @@ export default function BookTestPage() {
       const merged = cart.map((c) => byId.get(c.id) || c).filter(Boolean);
       setSelected(merged.length ? merged : cart);
     }
+  };
+
+  useEffect(() => {
+    loadCatalog();
+    const methods = getPaymentMethods();
+    if (methods?.length) setPayMethods(methods.filter((m) => m.enabled !== false));
+    window.addEventListener("catalogUpdated", loadCatalog);
+    window.addEventListener("homelab:adminCatalog", loadCatalog);
+    return () => {
+      window.removeEventListener("catalogUpdated", loadCatalog);
+      window.removeEventListener("homelab:adminCatalog", loadCatalog);
+    };
   }, []);
 
   const total = selected.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
@@ -42,7 +56,6 @@ export default function BookTestPage() {
       : [...selected, test];
     setSelected(next);
     setLocal("cart", next);
-    window.dispatchEvent(new Event("cartUpdated"));
   };
 
   const canNext = () => {
@@ -67,22 +80,24 @@ export default function BookTestPage() {
       time,
       address: address.trim(),
       region,
+      phone: currentUser.phone || momo.trim(),
+      email: currentUser.email || "",
       momo: momo.trim(),
       notes: notes.trim(),
       total: total + commitment,
       subtotal: total,
       commitment,
       status: "Pending",
+      paymentStatus: "Unpaid",
+      method: "MTN MoMo",
       createdAt: new Date().toISOString(),
       userEmail: currentUser.email || "",
-      userPhone: currentUser.phone || "",
+      userPhone: currentUser.phone || momo.trim(),
       clientName: currentUser.fullName || "Guest",
     };
-    const bookings = getLocal("bookings", []);
-    bookings.unshift(booking);
-    setLocal("bookings", bookings);
+    const existing = getAllBookings();
+    saveBookings([booking, ...existing]);
     setLocal("cart", []);
-    window.dispatchEvent(new Event("cartUpdated"));
     showToast("Booking confirmed! We will contact you soon.");
     router.push(currentUser.email || currentUser.phone ? "/dashboard" : "/login");
   };
@@ -128,6 +143,9 @@ export default function BookTestPage() {
                 </label>
               );
             })}
+            {allTests.length === 0 && (
+              <p className="text-sm text-amber-600">No tests available. Admin must add tests in Catalog.</p>
+            )}
             {selected.length > 0 && (
               <p className="text-sm font-medium text-gray-700 pt-2 border-t">
                 {selected.length} selected · Subtotal GH₵ {total}
@@ -203,13 +221,21 @@ export default function BookTestPage() {
                 </li>
               </ul>
             </div>
+            {payMethods.length > 0 && (
+              <div className="rounded-xl border border-gray-100 p-3 text-xs text-gray-600 space-y-1">
+                <p className="font-semibold text-[#0A1931]">Accepted payment methods</p>
+                {payMethods.map((m) => (
+                  <p key={m.id}>{m.title}: {m.number}</p>
+                ))}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium mb-1.5">MoMo / Phone for payment</label>
               <input type="tel" value={momo} onChange={(e) => setMomo(e.target.value)}
                 placeholder="+233 24 000 0000"
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D6EFD] outline-none" />
               <p className="text-xs text-gray-500 mt-1.5">
-                Pay commitment via MTN / Vodafone / AirtelTigo MoMo. Balance at collection.
+                Pay commitment via enabled MoMo methods. Balance at collection.
               </p>
             </div>
           </div>
