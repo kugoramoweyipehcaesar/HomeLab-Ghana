@@ -66,7 +66,7 @@ const SEED = [
 ];
 
 function initials(name) {
-  return name
+  return (name || "G")
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -79,7 +79,7 @@ const AVATAR = ["bg-blue-500", "bg-emerald-500", "bg-pink-500", "bg-orange-500",
 export default function AdminBookingsPage() {
   const { showToast } = useToast();
   const [bookings, setBookings] = useState([]);
-  const [q, setQ] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
   useEffect(() => {
@@ -88,15 +88,16 @@ export default function AdminBookingsPage() {
   }, []);
 
   const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return bookings.filter((b) => {
       const matchQ =
-        !q ||
-        b.clientName?.toLowerCase().includes(q.toLowerCase()) ||
-        b.address?.toLowerCase().includes(q.toLowerCase());
+        !query ||
+        b.clientName?.toLowerCase().includes(query) ||
+        b.address?.toLowerCase().includes(query);
       const matchS = statusFilter === "All" || b.status === statusFilter;
       return matchQ && matchS;
     });
-  }, [bookings, q, statusFilter]);
+  }, [bookings, searchQuery, statusFilter]);
 
   function updateStatus(id, status) {
     const updated = bookings.map((b) => (b.id === id ? { ...b, status } : b));
@@ -120,7 +121,7 @@ export default function AdminBookingsPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0F172A]">Bookings Management</h1>
@@ -129,10 +130,6 @@ export default function AdminBookingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="relative rounded-xl border border-slate-200 bg-white p-2.5">
-            <Bell className="h-4 w-4" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-          </button>
           <button
             type="button"
             onClick={() => showToast("New booking form opened")}
@@ -158,14 +155,14 @@ export default function AdminBookingsPage() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search bookings..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or location..."
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#2563EB]"
             />
           </div>
@@ -189,7 +186,7 @@ export default function AdminBookingsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm min-w-[640px]">
             <thead>
               <tr className="border-b text-xs uppercase tracking-wide text-slate-400">
                 <th className="pb-3 pr-3 font-medium">Client Name</th>
@@ -262,7 +259,8 @@ export default function AdminBookingsPage() {
           </table>
         </div>
         <p className="mt-4 text-xs text-slate-400">
-          Showing 1–{filtered.length} of {bookings.length || 128} bookings
+          Showing {filtered.length} of {bookings.length || SEED.length} bookings
+          {searchQuery ? ` · filter: “${searchQuery}”` : ""}
         </p>
       </div>
     </div>
