@@ -148,15 +148,25 @@ export default function AdminStaffPage() {
     const email = localStorage.getItem("admin_email") || "";
     setIsSuperAdmin(email === SUPER_ADMIN);
 
-    const savedStaff = getLocal(STAFF_KEY, null) || getLocal("adminStaff", null);
-    if (savedStaff?.length) setStaff(savedStaff);
+    // Always drop Rider from roles (removed from product)
+    setLocal(ROLES_KEY, DEFAULT_ROLES);
+    setRoles(DEFAULT_ROLES);
 
-    const savedRoles = getLocal(ROLES_KEY, null);
-    if (savedRoles?.length) {
-      const cleaned = savedRoles.filter((r) => r !== "Rider");
-      setRoles(cleaned.length ? cleaned : DEFAULT_ROLES);
-      setLocal(ROLES_KEY, cleaned.length ? cleaned : DEFAULT_ROLES);
-    } else setLocal(ROLES_KEY, DEFAULT_ROLES);
+    const savedStaff = getLocal(STAFF_KEY, null) || getLocal("adminStaff", null);
+    if (savedStaff?.length) {
+      const migrated = savedStaff.map((st) =>
+        st.role === "Rider"
+          ? {
+              ...st,
+              role: "Admin",
+              area: st.area === "Delivery / Logistics" ? "Front Desk" : st.area,
+            }
+          : st
+      );
+      setStaff(migrated);
+      setLocal(STAFF_KEY, migrated);
+      setLocal("adminStaff", migrated);
+    }
 
     setLoaded(true);
   }, []);
@@ -418,8 +428,7 @@ export default function AdminStaffPage() {
                   </td>
                   <td className="py-3.5 pr-3">
                     <span
-                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${\n                        ROLE_STYLE[st.role] || "bg-slate-100 text-slate-700"
-                      }`}
+                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${ROLE_STYLE[st.role] || "bg-slate-100 text-slate-700"}`}
                     >
                       {st.role}
                     </span>
