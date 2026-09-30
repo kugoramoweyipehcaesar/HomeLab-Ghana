@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Trash2, Shield } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import { setLocal } from "@/lib/utils";
-
-const SUPER_ADMIN = "kugoramoweyipehcaesar49@gmail.com";
 
 const RESET_KEYS = [
   "bookings",
@@ -28,31 +26,24 @@ const RESET_KEYS = [
 export default function AdminMaintenancePage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [allowed, setAllowed] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const email = localStorage.getItem("admin_email") || "";
-    if (email === SUPER_ADMIN) {
-      setAllowed(true);
-    } else {
-      setAllowed(false);
-    }
-  }, []);
-
   function resetAll() {
     if (confirmText !== "RESET") {
-      showToast('Type RESET to confirm', "error");
+      showToast("Type RESET to confirm", "error");
       return;
     }
-    if (!window.confirm("This will erase bookings, clients, staff, tests catalog data, results, payments, and cart in this browser. Continue?")) {
+    if (
+      !window.confirm(
+        "This will erase bookings, clients, staff, tests catalog data, results, payments, and cart in this browser. Continue?"
+      )
+    ) {
       return;
     }
     setBusy(true);
     try {
       RESET_KEYS.forEach((k) => localStorage.removeItem(k));
-      // Re-seed empty arrays so pages do not crash
       setLocal("bookings", []);
       setLocal("homelab_bookings", []);
       setLocal("homelab_clients", []);
@@ -74,26 +65,13 @@ export default function AdminMaintenancePage() {
     }
   }
 
-  if (!allowed) {
-    return (
-      <div className="p-6 lg:p-8">
-        <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
-          <Shield className="mx-auto mb-3 h-10 w-10 text-amber-600" />
-          <h1 className="text-xl font-bold text-[#0F172A]">Maintenance — Super Admin only</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Set your admin email to the super admin account to access system reset tools.
-          </p>
-          <p className="mt-3 text-xs text-slate-500 font-mono">{SUPER_ADMIN}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#0F172A]">Maintenance</h1>
-        <p className="text-sm text-slate-500">Super admin tools — reset site data in this browser</p>
+        <p className="text-sm text-slate-500">
+          System tools — reset site data stored in this browser
+        </p>
       </div>
 
       <div className="max-w-xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
@@ -104,12 +82,13 @@ export default function AdminMaintenancePage() {
           <div>
             <h2 className="text-lg font-bold text-[#0F172A]">Reset everything</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Clears bookings, clients, staff, test catalog (local), results, payments, payment methods, cart, and related settings stored in this browser.
+              Clears bookings, clients, staff, test catalog (local), results, payments, payment
+              methods, cart, and related settings stored in this browser.
             </p>
           </div>
         </div>
 
-        <ul className="mb-4 list-inside list-disc text-xs text-slate-500 space-y-1">
+        <ul className="mb-4 list-inside list-disc space-y-1 text-xs text-slate-500">
           <li>Bookings & public bookings</li>
           <li>Clients</li>
           <li>Staff & roles</li>
