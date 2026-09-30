@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Calendar,
@@ -14,6 +15,8 @@ import {
   HelpCircle,
   LogOut,
   FlaskConical,
+  Menu,
+  X,
 } from "lucide-react";
 
 const NAV = [
@@ -30,6 +33,19 @@ const NAV = [
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   function logout() {
     if (typeof window !== "undefined") {
@@ -39,16 +55,24 @@ export default function AdminSidebar() {
     router.push("/login");
   }
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-[#0F172A] text-white">
+  const sidebarBody = (
+    <>
       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2563EB]">
           <FlaskConical className="h-5 w-5 text-white" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-bold leading-tight">HomeLab GH</p>
           <p className="text-[11px] text-slate-400">Laboratory Service</p>
         </div>
+        <button
+          type="button"
+          className="lg:hidden p-1.5 rounded-lg hover:bg-white/10"
+          onClick={() => setOpen(false)}
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       <p className="px-5 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -64,6 +88,7 @@ export default function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setOpen(false)}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-[#2563EB] text-white shadow-lg shadow-blue-900/30"
@@ -77,6 +102,7 @@ export default function AdminSidebar() {
         })}
         <Link
           href="/admin/settings"
+          onClick={() => setOpen(false)}
           className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
         >
           <HelpCircle className="h-[18px] w-[18px]" />
@@ -102,6 +128,43 @@ export default function AdminSidebar() {
           <LogOut className="h-3.5 w-3.5" /> Log out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center gap-3 bg-[#0F172A] text-white px-4 py-3 border-b border-white/10">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="p-2 rounded-lg hover:bg-white/10"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2563EB]">
+            <FlaskConical className="h-4 w-4" />
+          </div>
+          <span className="text-sm font-bold">HomeLab GH Admin</span>
+        </div>
+      </div>
+
+      <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-[#0F172A] text-white">
+        {sidebarBody}
+      </aside>
+
+      {open && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-50 bg-black/50"
+            onClick={() => setOpen(false)}
+          />
+          <aside className="lg:hidden fixed left-0 top-0 z-[60] flex h-screen w-[min(280px,85vw)] flex-col bg-[#0F172A] text-white shadow-2xl">
+            {sidebarBody}
+          </aside>
+        </>
+      )}
+    </>
   );
 }
