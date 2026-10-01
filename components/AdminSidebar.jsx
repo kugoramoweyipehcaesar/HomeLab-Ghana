@@ -17,7 +17,6 @@ import {
   FlaskConical,
   Menu,
   X,
-  ExternalLink,
   Home,
 } from "lucide-react";
 import { isSuperAdminEmail } from "@/lib/auth";
@@ -118,7 +117,19 @@ export default function AdminSidebar() {
         </button>
       </div>
 
-      <p className="px-5 pb-2 pt-5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      {/* Always visible at top of menu */}
+      <div className="px-3 pt-3">
+        <Link
+          href="/"
+          onClick={() => setOpen(false)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 hover:bg-blue-600"
+        >
+          <Home className="h-4 w-4" />
+          Go back to site
+        </Link>
+      </div>
+
+      <p className="px-5 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         Menu
       </p>
 
@@ -146,22 +157,18 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
+      </nav>
 
-        <div className="my-2 border-t border-white/10" />
-
+      <div className="border-t border-white/10 p-4 space-y-2">
         <Link
           href="/"
           onClick={() => setOpen(false)}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-2 text-xs font-semibold text-white hover:bg-white/10"
         >
-          <Home className="h-[18px] w-[18px] shrink-0" />
+          <Home className="h-3.5 w-3.5" />
           Go back to site
-          <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-60" />
         </Link>
-      </nav>
-
-      <div className="border-t border-white/10 p-4">
-        <div className="mb-3 flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2563EB] text-xs font-bold">
             {initials}
           </div>
@@ -200,9 +207,9 @@ export default function AdminSidebar() {
         </div>
         <Link
           href="/"
-          className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+          className="shrink-0 rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
         >
-          Site
+          Go back to site
         </Link>
       </div>
 
