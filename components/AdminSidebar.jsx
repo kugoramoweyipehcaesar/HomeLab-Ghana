@@ -17,8 +17,10 @@ import {
   FlaskConical,
   Menu,
   X,
+  ExternalLink,
+  Home,
 } from "lucide-react";
-import { SUPER_ADMIN, isSuperAdminEmail } from "@/lib/auth";
+import { isSuperAdminEmail } from "@/lib/auth";
 import { getLocal } from "@/lib/utils";
 
 const NAV = [
@@ -144,6 +146,18 @@ export default function AdminSidebar() {
             </Link>
           );
         })}
+
+        <div className="my-2 border-t border-white/10" />
+
+        <Link
+          href="/"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
+        >
+          <Home className="h-[18px] w-[18px] shrink-0" />
+          Go back to site
+          <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-60" />
+        </Link>
       </nav>
 
       <div className="border-t border-white/10 p-4">
@@ -178,12 +192,18 @@ export default function AdminSidebar() {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2563EB]">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#2563EB]">
             <FlaskConical className="h-4 w-4" />
           </div>
-          <span className="text-sm font-bold">HomeLab GH Admin</span>
+          <span className="text-sm font-bold truncate">HomeLab GH Admin</span>
         </div>
+        <Link
+          href="/"
+          className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
+        >
+          Site
+        </Link>
       </div>
 
       <aside className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-[#0F172A] text-white">
