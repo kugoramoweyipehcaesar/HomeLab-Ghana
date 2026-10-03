@@ -53,7 +53,7 @@ export default function HomePage() {
             <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
               <div className="relative h-[340px] md:h-[400px] w-full">
                 <img
-                  src="/nurse-hero.jpg"
+                  src="https://litter.catbox.moe/8t0ypo.jpg"
                   alt="Certified HomeLab GH phlebotomist with home collection medical kit"
                   className="absolute inset-0 h-full w-full object-cover object-[center_20%]"
                 />
