@@ -48,14 +48,18 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Hero visual - real nurse with medical kit */}
+          {/* Hero visual - provided nurse photo with medical kit */}
           <div className="relative">
             <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
               <div className="relative h-[340px] md:h-[400px] w-full">
                 <img
-                  src="https://litter.catbox.moe/8t0ypo.jpg"
+                  src="/nurse-hero.jpg"
                   alt="Certified HomeLab GH phlebotomist with home collection medical kit"
                   className="absolute inset-0 h-full w-full object-cover object-[center_20%]"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = "https://litter.catbox.moe/8t0ypo.jpg";
+                  }}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-4 pb-4 pt-16">
                   <p className="font-bold text-white text-lg drop-shadow">Certified Phlebotomist</p>
