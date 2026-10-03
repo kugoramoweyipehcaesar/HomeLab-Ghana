@@ -1,0 +1,31 @@
+name: Sync nurse hero
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-nurse-hero.yml'
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download provided nurse hero image
+        run: |
+          mkdir -p public
+          curl -fsSL -o public/nurse-hero.jpg "https://litter.catbox.moe/8t0ypo.jpg"
+          file public/nurse-hero.jpg || true
+          ls -la public/nurse-hero.jpg
+      - name: Commit image if missing or changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/nurse-hero.jpg
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: add public/nurse-hero.jpg (provided nurse photo)"
+            git push
+          fi
